@@ -818,7 +818,35 @@ export const getNotifications = () => {
   try {
     const saved = safeStorage.getItem(NOTIFICATIONS_KEY);
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      const clearedAtStr = safeStorage.getItem("savdeshvani_notifs_cleared_at");
+      const readAtStr = safeStorage.getItem("savdeshvani_notifs_read_at");
+      
+      if (Array.isArray(parsed)) {
+        const clearedAt = clearedAtStr ? parseInt(clearedAtStr, 10) : 0;
+        const readAt = readAtStr ? parseInt(readAtStr, 10) : 0;
+
+        return parsed
+          .filter(n => {
+            let notifTime = 0;
+            if (n.createdAt) notifTime = new Date(n.createdAt).getTime();
+            else if (n.id && String(n.id).startsWith("notif-")) notifTime = parseInt(String(n.id).replace("notif-", ""), 10);
+            else notifTime = Date.now();
+            return notifTime > clearedAt;
+          })
+          .map(n => {
+            let notifTime = 0;
+            if (n.createdAt) notifTime = new Date(n.createdAt).getTime();
+            else if (n.id && String(n.id).startsWith("notif-")) notifTime = parseInt(String(n.id).replace("notif-", ""), 10);
+            else notifTime = Date.now();
+            
+            if (notifTime <= readAt) {
+              return { ...n, read: true, isRead: true };
+            }
+            return n;
+          });
+      }
+      return [];
     }
   } catch (e) {
     console.error("Error reading notifications:", e);
@@ -912,8 +940,9 @@ export const markNotificationAsRead = (id) => {
 
 export const markAllNotificationsAsRead = () => {
   try {
+    safeStorage.setItem("savdeshvani_notifs_read_at", Date.now().toString());
     const notifications = getNotifications();
-    const updated = notifications.map((n) => ({ ...n, read: true }));
+    const updated = notifications.map((n) => ({ ...n, read: true, isRead: true }));
     safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("sv_notifications_change"));
     return updated;
@@ -931,7 +960,7 @@ export const syncNotificationsFromServer = async () => {
       if (Array.isArray(convexNotifs) && convexNotifs.length > 0) {
         safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(convexNotifs));
         window.dispatchEvent(new Event("sv_notifications_change"));
-        return convexNotifs;
+        return getNotifications();
       }
     } catch {}
 
@@ -942,7 +971,7 @@ export const syncNotificationsFromServer = async () => {
       if (data && Array.isArray(data.notifications)) {
         safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(data.notifications));
         window.dispatchEvent(new Event("sv_notifications_change"));
-        return data.notifications;
+        return getNotifications();
       }
     }
   } catch (e) {}
@@ -951,9 +980,9 @@ export const syncNotificationsFromServer = async () => {
 
 export const clearNotifications = () => {
   try {
+    safeStorage.setItem("savdeshvani_notifs_cleared_at", Date.now().toString());
     safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify([]));
     window.dispatchEvent(new Event("sv_notifications_change"));
-    fetch("/api/notifications", { method: "DELETE" }).catch(() => {});
     return [];
   } catch (e) {
     console.error("Error clearing notifications:", e);
