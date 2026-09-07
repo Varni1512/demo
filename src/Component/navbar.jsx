@@ -78,6 +78,7 @@ const Navbar = () => {
 
   const searchInputRef = useRef(null);
   const notifDropdownRef = useRef(null);
+  const mobileNotifDropdownRef = useRef(null);
 
   // Sync auth state
   useEffect(() => {
@@ -115,10 +116,10 @@ const Navbar = () => {
   // Close notifications dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (
-        notifDropdownRef.current &&
-        !notifDropdownRef.current.contains(e.target)
-      ) {
+      const isOutsideDesktop = !notifDropdownRef.current || !notifDropdownRef.current.contains(e.target);
+      const isOutsideMobile = !mobileNotifDropdownRef.current || !mobileNotifDropdownRef.current.contains(e.target);
+      
+      if (isOutsideDesktop && isOutsideMobile) {
         setNotifOpen(false);
       }
     };
@@ -789,7 +790,7 @@ const Navbar = () => {
               </button>
 
               {/* Mobile Notification Bell */}
-              <div className="relative">
+              <div className="relative" ref={mobileNotifDropdownRef}>
                 <button
                   onClick={() => setNotifOpen(!notifOpen)}
                   className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${
