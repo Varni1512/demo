@@ -434,15 +434,28 @@ function saveDeletedArticleIds(ids) {
 }
 
 // GET /api/articles - Retrieve all articles (with deletedIds)
-app.get("/api/articles", (req, res) => {
-  const articles = getStoredArticles();
+app.get("/api/articles", async (req, res) => {
+  let articles = [];
+  try {
+    const convexArticles = await convexClient.query(api.articles.get);
+    if (Array.isArray(convexArticles) && convexArticles.length > 0) {
+      articles = convexArticles;
+    }
+  } catch (err) {
+    console.error("Error fetching articles from Convex:", err);
+  }
+
+  if (articles.length === 0) {
+    articles = getStoredArticles();
+  }
+
   const deletedIds = getDeletedArticleIds();
   const activeArticles = articles.filter((a) => !deletedIds.includes(String(a.id)));
   res.json({ success: true, articles: activeArticles, deletedIds });
 });
 
 // GET /api/articles/:id - Retrieve single article by ID or slug
-app.get("/api/articles/:id", (req, res) => {
+app.get("/api/articles/:id", async (req, res) => {
   const { id } = req.params;
   const deletedIds = getDeletedArticleIds();
   const searchKey = decodeURIComponent(String(id)).trim().toLowerCase();
@@ -451,12 +464,29 @@ app.get("/api/articles/:id", (req, res) => {
     return res.status(404).json({ success: false, error: "Article has been deleted" });
   }
 
-  const articles = getStoredArticles();
-  const article = articles.find(
-    (a) =>
-      String(a.id).toLowerCase() === searchKey ||
-      (a.slug && a.slug.toLowerCase() === searchKey)
-  );
+  let article = null;
+  try {
+    const convexArticles = await convexClient.query(api.articles.get);
+    if (Array.isArray(convexArticles)) {
+      article = convexArticles.find(
+        (a) =>
+          String(a.id).toLowerCase() === searchKey ||
+          (a.slug && a.slug.toLowerCase() === searchKey)
+      );
+    }
+  } catch (err) {
+    console.error("Error fetching article by ID from Convex:", err);
+  }
+
+  if (!article) {
+    const articles = getStoredArticles();
+    article = articles.find(
+      (a) =>
+        String(a.id).toLowerCase() === searchKey ||
+        (a.slug && a.slug.toLowerCase() === searchKey)
+    );
+  }
+
   if (article) {
     return res.json({ success: true, article });
   }
@@ -551,8 +581,21 @@ function saveDeletedAdIds(ids) {
   return writeJsonFile(DELETED_ADS_FILE, uniqueIds);
 }
 
-app.get("/api/advertisements", (req, res) => {
-  const ads = getStoredAds();
+app.get("/api/advertisements", async (req, res) => {
+  let ads = [];
+  try {
+    const convexAds = await convexClient.query(api.advertisements.get);
+    if (Array.isArray(convexAds) && convexAds.length > 0) {
+      ads = convexAds;
+    }
+  } catch (err) {
+    console.error("Error fetching ads from Convex:", err);
+  }
+
+  if (ads.length === 0) {
+    ads = getStoredAds();
+  }
+
   const deletedIds = getDeletedAdIds();
   const activeAds = ads.filter((a) => !deletedIds.includes(String(a.id)));
   res.json({ success: true, advertisements: activeAds, deletedIds });

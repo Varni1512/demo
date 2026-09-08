@@ -32,7 +32,7 @@ import ratu from "../Component/photos/ratu.jpeg";
 import trikut from "../Component/photos/trikut.jpg";
 export { toHindiNumber } from "../utils/hindiNumbers";
 import { broadcastLocalEvent } from "../utils/realtimeEngine";
-import { convex } from "../utils/convexClient";
+import { convex, convexHttp } from "../utils/convexClient";
 import { api } from "../../convex/_generated/api";
 import { safeStorage } from "../utils/safeStorage";
 
@@ -578,7 +578,17 @@ const DELETED_ADS_KEY = "savdeshvani_deleted_ad_ids";
 
 export const syncAdvertisementsFromServer = async () => {
   try {
-    // 1. Try Convex live database query
+    // 1. Try Convex live database query via HTTP client first (fast & reliable)
+    try {
+      const convexAds = await convexHttp.query(api.advertisements.get);
+      if (Array.isArray(convexAds) && convexAds.length > 0) {
+        safeStorage.setItem(ADVERTISEMENTS_KEY, JSON.stringify(convexAds));
+        window.dispatchEvent(new Event("sv_ads_change"));
+        return getAdvertisements();
+      }
+    } catch {}
+
+    // Fallback to convex websocket client
     try {
       const convexAds = await Promise.race([
         convex.query(api.advertisements.get),
@@ -993,7 +1003,17 @@ export const clearNotifications = () => {
 // Sync articles and deletions from backend server across all user devices
 export const syncArticlesFromServer = async () => {
   try {
-    // 1. Try Convex real-time DB query first
+    // 1. Try Convex real-time DB query via HTTP client first (fast & reliable)
+    try {
+      const convexArticles = await convexHttp.query(api.articles.get);
+      if (Array.isArray(convexArticles) && convexArticles.length > 0) {
+        safeStorage.setItem(STORAGE_KEY, JSON.stringify(convexArticles));
+        window.dispatchEvent(new Event("sv_articles_change"));
+        return getAllArticles();
+      }
+    } catch {}
+
+    // Fallback to convex websocket client
     try {
       const convexArticles = await Promise.race([
         convex.query(api.articles.get),
