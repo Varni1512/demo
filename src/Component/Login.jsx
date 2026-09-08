@@ -217,7 +217,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
+    <main className="min-h-[100dvh] bg-gradient-to-br from-orange-50 via-white to-green-50 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
       {/* ── Forgot Password Modal ── */}
       {showForgotModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">

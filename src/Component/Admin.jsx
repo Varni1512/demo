@@ -535,7 +535,7 @@ export default function Admin() {
   };
 
   return (
-    <div className="admin-container allow-select flex h-screen bg-slate-100 overflow-hidden font-sans text-slate-800">
+    <div className="admin-container allow-select flex h-[100dvh] bg-slate-100 overflow-hidden font-sans text-slate-800">
       {/* Toast Notification Popup */}
       {toast && (
         <div
