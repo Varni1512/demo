@@ -27,6 +27,11 @@ app.use(cors());
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
+// Top-level Health check endpoints for GoDaddy PaaS / Cloud Load Balancers
+app.all(["/health", "/healthz", "/_health", "/ping"], (req, res) => {
+  res.status(200).json({ status: "healthy", uptime: Math.floor(process.uptime()), timestamp: new Date().toISOString() });
+});
+
 // Uploads directory for news and media assets
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) {
