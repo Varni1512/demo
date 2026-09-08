@@ -1,4 +1,25 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useRef, useState, useEffect, Component } from "react";
+class AdminErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-10 bg-red-50 text-red-800 rounded-xl m-10 border border-red-200">
+          <h2 className="text-xl font-bold mb-4">React Render Error:</h2>
+          <pre className="text-sm whitespace-pre-wrap">{this.state.error?.toString()}</pre>
+          <pre className="text-xs whitespace-pre-wrap mt-4">{this.state.error?.stack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaBars,
@@ -1066,6 +1087,7 @@ export default function Admin() {
           {/* TAB 2: ALL NEWS ARTICLES TABLE                       */}
           {/* ==================================================== */}
           {activePage === "news" && (
+            <AdminErrorBoundary>
             <div className="space-y-5 animate-fadeIn">
               {/* Filter and Search Bar */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1227,6 +1249,7 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+            </AdminErrorBoundary>
           )}
 
           {/* ==================================================== */}
