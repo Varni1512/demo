@@ -282,8 +282,12 @@ export default function ArticleDetail() {
             {/* Author / Reporter & Date Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 py-4 mb-6 border-y border-slate-100 text-xs text-slate-600">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                  {(article.reporter || article.author || "S").charAt(0)}
+                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center shadow-sm overflow-hidden">
+                  <img
+                    src="/logo.jpeg"
+                    alt="Logo"
+                    className="h-full w-full object-contain"
+                  />
                 </div>
                 <div>
                   <p className="font-bold text-blue-950 text-sm">

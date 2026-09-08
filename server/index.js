@@ -12,6 +12,10 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../convex/_generated/api.js";
+
+const convexClient = new ConvexHttpClient(process.env.VITE_CONVEX_URL || "https://original-raven-947.convex.cloud");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1287,23 +1291,40 @@ if (staticDistPath) {
   );
 
   // Function to render index.html with dynamic OpenGraph meta tags for WhatsApp & Social Sharing
-  function renderArticlePageHtml(indexHtmlPath, req, res, articleId) {
+  async function renderArticlePageHtml(indexHtmlPath, req, res, articleId) {
     try {
       const rawHtml = fs.readFileSync(indexHtmlPath, "utf-8");
       const searchKey = decodeURIComponent(String(articleId || "")).trim().toLowerCase();
-      const articles = getStoredArticles();
-      const deletedIds = getDeletedArticleIds();
-
-      if (deletedIds.some((d) => d.toLowerCase() === searchKey)) {
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        return res.sendFile(indexHtmlPath);
+      
+      // Fetch article from Convex DB
+      let article = null;
+      try {
+        const convexArticles = await convexClient.query(api.articles.get);
+        article = convexArticles.find(
+          (a) =>
+            String(a.id).toLowerCase() === searchKey ||
+            (a.slug && a.slug.toLowerCase() === searchKey)
+        );
+      } catch (err) {
+        console.error("Error fetching article from Convex:", err);
       }
 
-      const article = articles.find(
-        (a) =>
-          String(a.id).toLowerCase() === searchKey ||
-          (a.slug && a.slug.toLowerCase() === searchKey)
-      );
+      // Fallback to local JSON if Convex fails
+      if (!article) {
+        const articles = getStoredArticles();
+        const deletedIds = getDeletedArticleIds();
+
+        if (deletedIds.some((d) => d.toLowerCase() === searchKey)) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          return res.sendFile(indexHtmlPath);
+        }
+
+        article = articles.find(
+          (a) =>
+            String(a.id).toLowerCase() === searchKey ||
+            (a.slug && a.slug.toLowerCase() === searchKey)
+        );
+      }
 
       if (!article) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -1328,7 +1349,7 @@ if (staticDistPath) {
           fullImageUrl = `${baseUrl}${cleanPath}`;
         }
       } else {
-        fullImageUrl = `${baseUrl}/src/Component/photos/logo.jpeg`;
+        fullImageUrl = `${baseUrl}/logo.jpeg`;
       }
 
       const fullArticleUrl = `${baseUrl}/news/${encodeURIComponent(article.id)}`;
@@ -1388,10 +1409,10 @@ if (staticDistPath) {
   }
 
   // Dynamic News Article Sharing Routes (WhatsApp, Facebook, Twitter preview crawlers)
-  app.get(["/news/:id", "/article/:id"], (req, res) => {
+  app.get(["/news/:id", "/article/:id"], async (req, res) => {
     const indexPath = path.join(staticDistPath, "index.html");
     if (fs.existsSync(indexPath)) {
-      return renderArticlePageHtml(indexPath, req, res, req.params.id);
+      return await renderArticlePageHtml(indexPath, req, res, req.params.id);
     }
     return res.status(404).send("Not found");
   });
