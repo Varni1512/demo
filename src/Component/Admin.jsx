@@ -799,12 +799,13 @@ export default function Admin() {
 
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-slate-900 capitalize">
-                {activePage === "dashboard" && t("dashboard")}
-                {activePage === "news" && t("newsList")}
-                {activePage === "add-news" && (editingArticleId ? t("editNews") : t("addNews"))}
-                {activePage === "ads" && t("advertisementsTab")}
-                {activePage === "notifications" && t("notificationsTab")}
-                {activePage === "subscribers" && t("subscribersTab")}
+                {activePage === "dashboard" && <span>{t("dashboard")}</span>}
+                {activePage === "news" && <span>{t("newsList")}</span>}
+                {activePage === "add-news" && <span>{editingArticleId ? t("editNews") : t("addNews")}</span>}
+                {activePage === "ads" && <span>{t("advertisementsTab")}</span>}
+                {activePage === "notifications" && <span>{t("notificationsTab")}</span>}
+                {activePage === "subscribers" && <span>{t("subscribersTab")}</span>}
+                {activePage === "users" && <span>{language === "hi" ? "उपयोगकर्ता और पाठक" : "Users & Readers"}</span>}
               </h2>
               <p className="text-xs text-slate-500">
                 {t("adminTagline")}
@@ -877,6 +878,7 @@ export default function Admin() {
 
         {/* Scrollable Page Body */}
         <main className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
+          <AdminErrorBoundary>
           {/* ==================================================== */}
           {/* TAB 1: DASHBOARD                                    */}
           {/* ==================================================== */}
@@ -1087,7 +1089,6 @@ export default function Admin() {
           {/* TAB 2: ALL NEWS ARTICLES TABLE                       */}
           {/* ==================================================== */}
           {activePage === "news" && (
-            <AdminErrorBoundary>
             <div className="space-y-5 animate-fadeIn">
               {/* Filter and Search Bar */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -1249,7 +1250,6 @@ export default function Admin() {
                 </div>
               </div>
             </div>
-            </AdminErrorBoundary>
           )}
 
           {/* ==================================================== */}
@@ -2435,6 +2435,7 @@ export default function Admin() {
               )}
             </div>
           )}
+          </AdminErrorBoundary>
         </main>
       </div>
 
