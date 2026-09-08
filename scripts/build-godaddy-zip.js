@@ -69,6 +69,7 @@ async function createPackage() {
         nodemailer: "^9.0.5",
         pino: "^9.6.0",
         qrcode: "^1.5.4",
+        convex: "^1.10.0"
       },
     };
 
