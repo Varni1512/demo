@@ -47,7 +47,7 @@ import {
   getCategoryFallbackImage,
 } from "../data/newsData";
 
-import { isAdminAuthenticated, logoutAdmin, getAdminUser } from "../utils/auth";
+import { isAdminAuthenticated, logoutAdmin, getAdminUser, isUserAuthenticated, getCurrentAccount, logoutAll } from "../utils/auth";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 const Navbar = () => {
@@ -63,6 +63,8 @@ const Navbar = () => {
   const [notifications, setNotifications] = useState(() => getNotifications());
   const [isAdmin, setIsAdmin] = useState(() => isAdminAuthenticated());
   const [adminUser, setAdminUser] = useState(() => getAdminUser());
+  const [isUser, setIsUser] = useState(() => isUserAuthenticated());
+  const [currentUser, setCurrentUser] = useState(() => getCurrentAccount());
 
   // Accordion state for categories dropdown in sidebar (open by default for quick access)
   const [openSections, setOpenSections] = useState({
@@ -83,9 +85,10 @@ const Navbar = () => {
   // Sync auth state
   useEffect(() => {
     const checkAuth = () => {
-      const auth = isAdminAuthenticated();
-      setIsAdmin(auth);
+      setIsAdmin(isAdminAuthenticated());
       setAdminUser(getAdminUser());
+      setIsUser(isUserAuthenticated());
+      setCurrentUser(getCurrentAccount());
     };
 
     window.addEventListener("sv_auth_change", checkAuth);
@@ -190,7 +193,7 @@ const Navbar = () => {
   };
 
   const handleLogout = () => {
-    logoutAdmin();
+    logoutAll();
     navigate("/Login");
   };
 
@@ -246,7 +249,7 @@ const Navbar = () => {
         { icon: <Info size={18} />, title: t("aboutUs"), to: "/About" },
       ],
     },
-    {
+    ...((!isUser || isAdmin) ? [{
       id: "adminAccount",
       section: t("adminAccount"),
       items: isAdmin
@@ -256,7 +259,7 @@ const Navbar = () => {
         : [
             { icon: <User size={18} />, title: t("adminLogin"), to: "/Login" },
           ],
-    },
+    }] : []),
   ];
 
   return (
@@ -429,15 +432,17 @@ const Navbar = () => {
           })}
         </div>
 
-        {/* Admin Footer info */}
-        {isAdmin && (
+        {/* User / Admin Footer info */}
+        {(isAdmin || isUser) && (
           <div className="p-4 border-t border-gray-100 bg-slate-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-blue-950 text-white flex items-center justify-center font-bold text-xs">
-                A
+              <div className={`h-8 w-8 rounded-full ${isAdmin ? 'bg-blue-950' : 'bg-orange-600'} text-white flex items-center justify-center font-bold text-xs`}>
+                {isAdmin ? "A" : (currentUser?.name?.charAt(0) || "U")}
               </div>
               <div className="text-xs">
-                <p className="font-bold text-blue-950">Swadesh Vani Admin</p>
+                <p className={`font-bold ${isAdmin ? 'text-blue-950' : 'text-orange-800'}`}>
+                  {isAdmin ? "Swadesh Vani Admin" : (currentUser?.name || "User")}
+                </p>
                 <p className="text-[10px] text-emerald-600 font-medium">Logged in</p>
               </div>
             </div>
@@ -729,20 +734,27 @@ const Navbar = () => {
 
               <div className="h-4 w-px bg-gray-200" />
 
-              {/* Login / Admin Action Button (In menu's place) */}
-              {isAdmin ? (
+              {/* Login / Admin / User Action Button (In menu's place) */}
+              {isAdmin || isUser ? (
                 <div className="flex items-center gap-2">
-                  <Link
-                    to="/Admin"
-                    className="flex items-center gap-1.5 rounded-full bg-blue-950 px-3.5 py-2 text-white text-xs font-bold shadow-sm hover:bg-blue-900 transition"
-                  >
-                    <UserCog size={15} className="text-orange-400" />
-                    <span>एडमिन पैनल</span>
-                  </Link>
+                  {isAdmin ? (
+                    <Link
+                      to="/Admin"
+                      className="flex items-center gap-1.5 rounded-full bg-blue-950 px-3.5 py-2 text-white text-xs font-bold shadow-sm hover:bg-blue-900 transition"
+                    >
+                      <UserCog size={15} className="text-orange-400" />
+                      <span>एडमिन पैनल</span>
+                    </Link>
+                  ) : (
+                    <div className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3.5 py-2 text-gray-700 text-xs font-bold bg-slate-50 shadow-sm cursor-default">
+                      <User size={15} className="text-orange-600" />
+                      <span className="truncate max-w-[100px]">{currentUser?.name || "प्रोफ़ाइल"}</span>
+                    </div>
+                  )}
                   <button
                     onClick={handleLogout}
                     title="लॉगआउट"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-200 transition cursor-pointer"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
                   >
                     <LogOut size={15} />
                   </button>
@@ -750,7 +762,7 @@ const Navbar = () => {
               ) : (
                 <Link
                   to="/Login"
-                  className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3.5 py-2 text-gray-700 transition hover:border-orange-300 hover:text-orange-600 text-xs font-bold"
+                  className="flex items-center gap-1.5 rounded-full border border-gray-200 px-3.5 py-2 text-gray-700 transition hover:border-orange-300 hover:text-orange-600 hover:bg-orange-50 text-xs font-bold"
                 >
                   <User size={15} />
                   <span>लॉगिन</span>
@@ -900,13 +912,24 @@ const Navbar = () => {
               </button>
 
               {/* Mobile Login / User Icon (In Menu's place at the right end) */}
-              <Link
-                to={isAdmin ? "/Admin" : "/Login"}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-700 transition hover:border-orange-300 hover:text-orange-600"
-                aria-label={isAdmin ? "Admin Dashboard" : "Login"}
-              >
-                {isAdmin ? <UserCog size={17} className="text-orange-600" /> : <User size={17} />}
-              </Link>
+              {isAdmin || isUser ? (
+                <button
+                  onClick={handleLogout}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-red-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                  title="लॉगआउट"
+                  aria-label="Logout"
+                >
+                  <LogOut size={17} />
+                </button>
+              ) : (
+                <Link
+                  to="/Login"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-700 transition hover:border-orange-300 hover:text-orange-600"
+                  aria-label="Login"
+                >
+                  <User size={17} />
+                </Link>
+              )}
             </div>
           </div>
         </div>
