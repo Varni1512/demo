@@ -451,7 +451,17 @@ app.get("/api/articles", async (req, res) => {
 
   const deletedIds = getDeletedArticleIds();
   const activeArticles = articles.filter((a) => !deletedIds.includes(String(a.id)));
-  res.json({ success: true, articles: activeArticles, deletedIds });
+  
+  // Convert any heavy base64 data URIs to physical files to prevent 5MB localStorage QuotaExceededError
+  const optimizedArticles = activeArticles.map((art) => {
+    let img = art.image;
+    if (img && typeof img === "string" && img.startsWith("data:image/")) {
+      img = saveBase64Image(img, `art-${art.id}`);
+    }
+    return { ...art, image: img };
+  });
+
+  res.json({ success: true, articles: optimizedArticles, deletedIds });
 });
 
 // GET /api/articles/:id - Retrieve single article by ID or slug

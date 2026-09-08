@@ -9,6 +9,9 @@ const sessionMemoryStore = new Map();
 
 export const safeStorage = {
   getItem: (key) => {
+    if (memoryStore.has(key)) {
+      return memoryStore.get(key);
+    }
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         const value = window.localStorage.getItem(key);
@@ -17,7 +20,7 @@ export const safeStorage = {
     } catch (e) {
       // localStorage is blocked or restricted (e.g. Incognito / Safari Private)
     }
-    return memoryStore.has(key) ? memoryStore.get(key) : null;
+    return null;
   },
 
   setItem: (key, value) => {
@@ -29,7 +32,12 @@ export const safeStorage = {
         window.localStorage.setItem(key, strValue);
       }
     } catch (e) {
-      // QuotaExceededError or SecurityError in Incognito mode
+      // QuotaExceededError or SecurityError: remove stale key from localStorage so memoryStore takes effect
+      try {
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.removeItem(key);
+        }
+      } catch (err) {}
     }
   },
 
