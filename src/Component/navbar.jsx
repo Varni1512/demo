@@ -153,7 +153,7 @@ const Navbar = () => {
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
-        setMenuOpen(false);
+        setSidebarOpen(false);
       }
     };
     window.addEventListener("resize", handleResize);

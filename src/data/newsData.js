@@ -1040,8 +1040,8 @@ export const syncArticlesFromServer = async () => {
           safeStorage.setItem(DELETED_ARTICLES_KEY, JSON.stringify([...currentDeleted]));
         }
 
-        // 2. Sync articles list
-        if (Array.isArray(data.articles)) {
+        // 2. Sync articles list (only store if server returned non-empty articles)
+        if (Array.isArray(data.articles) && data.articles.length > 0) {
           safeStorage.setItem(STORAGE_KEY, JSON.stringify(data.articles));
         }
 
@@ -1094,16 +1094,19 @@ export const getAllArticles = () => {
     const saved = safeStorage.getItem(STORAGE_KEY);
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         const deletedIds = new Set(
           JSON.parse(safeStorage.getItem(DELETED_ARTICLES_KEY) || "[]").map(String)
         );
-        return parsed
+        const filtered = parsed
           .filter((a) => !deletedIds.has(String(a.id)))
           .map((a) => ({
             ...a,
             image: resolveArticleImage(a.image),
           }));
+        if (filtered.length > 0) {
+          return filtered;
+        }
       }
     }
   } catch (e) {
