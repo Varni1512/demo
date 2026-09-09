@@ -325,9 +325,9 @@ export default function ArticleDetail() {
                 <button
                   onClick={handleShareFb}
                   title="Share on Facebook"
-                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 active:scale-95 transition text-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 active:scale-95 transition"
                 >
-                  <FaFacebookF />
+                  <FaFacebookF className="text-xs" /> Facebook
                 </button>
 
                 {/* LinkedIn */}
@@ -432,12 +432,20 @@ export default function ArticleDetail() {
                 झारखंड और देश-दुनिया की हर खबर से जुड़े रहने के लिए हमारे व्हाट्सएप चैनल से जुड़ें।
               </p>
 
-              <button
-                onClick={handleShareWa}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-500 text-white font-bold text-xs shadow-lg shadow-green-500/30 hover:bg-green-600 transition"
-              >
-                <FaWhatsapp className="text-base" /> WhatsApp पर शेयर करें
-              </button>
+              <div className="space-y-2.5">
+                <button
+                  onClick={handleShareWa}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-500 text-white font-bold text-xs shadow-lg shadow-green-500/30 hover:bg-green-600 transition"
+                >
+                  <FaWhatsapp className="text-base" /> WhatsApp पर शेयर करें
+                </button>
+                <button
+                  onClick={handleShareFb}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition"
+                >
+                  <FaFacebookF className="text-base" /> Facebook पर शेयर करें
+                </button>
+              </div>
             </div>
 
             {/* Related Articles List */}

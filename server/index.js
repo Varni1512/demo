@@ -1421,37 +1421,48 @@ if (staticDistPath) {
         .replace(/>/g, "&gt;");
 
       const dynamicMetaTags = `
-    <!-- Dynamic Social Share & WhatsApp OpenGraph Tags -->
+    <!-- Dynamic Social Share, Facebook & WhatsApp OpenGraph Tags -->
     <title>${safeTitle} | स्वदेश वाणी</title>
     <meta name="description" content="${safeDescription}" />
+    <link rel="canonical" href="${fullArticleUrl}" />
+
+    <!-- Open Graph (Facebook / WhatsApp / LinkedIn) -->
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="स्वदेश वाणी (Swadesh Vaani)" />
     <meta property="og:title" content="${safeTitle}" />
     <meta property="og:description" content="${safeDescription}" />
+    <meta property="og:url" content="${fullArticleUrl}" />
     <meta property="og:image" content="${fullImageUrl}" />
     <meta property="og:image:secure_url" content="${fullImageUrl}" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:url" content="${fullArticleUrl}" />
-    <link rel="image_src" href="${fullImageUrl}" />
+    <meta property="og:image:alt" content="${safeTitle}" />
+    <meta property="og:locale" content="hi_IN" />
+
+    <!-- Article specific metadata for Facebook -->
+    <meta property="article:published_time" content="${article.date || new Date().toISOString()}" />
+    <meta property="article:section" content="${article.category || 'News'}" />
+    <meta property="article:author" content="${article.reporter || article.author || 'स्वदेश वाणी ब्यूरो'}" />
+
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${safeTitle}" />
     <meta name="twitter:description" content="${safeDescription}" />
     <meta name="twitter:image" content="${fullImageUrl}" />
-    <meta name="twitter:url" content="${fullArticleUrl}" />`;
+    <meta name="twitter:url" content="${fullArticleUrl}" />
+    <link rel="image_src" href="${fullImageUrl}" />`;
 
       let injectedHtml = rawHtml;
       if (injectedHtml.includes("</head>")) {
-        // Strip static title and default og:image tags before injecting dynamic article tags
+        // Strip ALL static title, description, OpenGraph, article, and Twitter tags before injecting dynamic tags
         injectedHtml = injectedHtml
           .replace(/<title>[\s\S]*?<\/title>/gi, "")
-          .replace(/<meta\s+property=["']og:title["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+property=["']og:description["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+property=["']og:image["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+property=["']og:image:secure_url["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+name=["']twitter:title["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+name=["']twitter:description["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+name=["']twitter:image["'][\s\S]*?>/gi, "")
+          .replace(/<meta\s+name=["']description["'][\s\S]*?>/gi, "")
+          .replace(/<meta\s+property=["']og:[^"']+["'][\s\S]*?>/gi, "")
+          .replace(/<meta\s+property=["']article:[^"']+["'][\s\S]*?>/gi, "")
+          .replace(/<meta\s+name=["']twitter:[^"']+["'][\s\S]*?>/gi, "")
+          .replace(/<link\s+rel=["'](canonical|image_src)["'][\s\S]*?>/gi, "")
           .replace("</head>", `${dynamicMetaTags}\n  </head>`);
       }
 
@@ -1467,7 +1478,7 @@ if (staticDistPath) {
   }
 
   // Dynamic News Article Sharing Routes (WhatsApp, Facebook, Twitter preview crawlers)
-  app.get(["/news/:id", "/article/:id"], async (req, res) => {
+  app.get(["/news/:id", "/article/:id", "/news/:id/", "/article/:id/"], async (req, res) => {
     const indexPath = path.join(staticDistPath, "index.html");
     if (fs.existsSync(indexPath)) {
       return await renderArticlePageHtml(indexPath, req, res, req.params.id);

@@ -51,6 +51,7 @@ import {
   FaImage,
   FaMousePointer,
   FaWhatsapp,
+  FaFacebookF,
   FaUserCheck,
   FaDownload,
   FaFileDownload,
@@ -2564,7 +2565,7 @@ export default function Admin() {
                 <FaExternalLinkAlt size={12} />
               </a>
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -2572,10 +2573,10 @@ export default function Admin() {
                     navigator.clipboard.writeText(articleUrl);
                     showToast("लिंक कॉपी कर लिया गया!", "success");
                   }}
-                  className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+                  className="py-2.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
                 >
                   <FaCopy size={12} />
-                  <span>लिंक कॉपी करें</span>
+                  <span>कॉपी</span>
                 </button>
 
                 <button
@@ -2587,10 +2588,23 @@ export default function Admin() {
                     const text = `📰 *${headline}*${excerpt}\n\n👉 *पूरी खबर यहां पढ़ें:*\n${articleUrl}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews #BreakingNews`;
                     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
                   }}
-                  className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+                  className="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
                 >
                   <FaWhatsapp size={13} />
-                  <span>WhatsApp शेयर</span>
+                  <span>WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const articleUrl = `${window.location.origin}/news/${publishedModalArticle.id}`;
+                    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(articleUrl)}`;
+                    window.open(fbUrl, "fbShare", "width=640,height=580,menubar=no,toolbar=no");
+                  }}
+                  className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+                >
+                  <FaFacebookF size={12} />
+                  <span>Facebook</span>
                 </button>
               </div>
 
