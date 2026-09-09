@@ -74,12 +74,6 @@ function AppLayout() {
       }
     };
 
-    const handleContextMenu = (e) => {
-      if (!isAdminPage && !isAllowedTarget(e.target)) {
-        e.preventDefault();
-      }
-    };
-
     const handleKeyDown = (e) => {
       if (isAdminPage || isAllowedTarget(e.target)) return;
       // Block Ctrl+C, Ctrl+X, Ctrl+U (view source), Ctrl+A (select all), Ctrl+S (save page)
@@ -94,14 +88,12 @@ function AppLayout() {
     document.addEventListener("selectstart", handleSelectStart);
     document.addEventListener("copy", handleCopy);
     document.addEventListener("cut", handleCut);
-    document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.removeEventListener("selectstart", handleSelectStart);
       document.removeEventListener("copy", handleCopy);
       document.removeEventListener("cut", handleCut);
-      document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isAdminPage]);
