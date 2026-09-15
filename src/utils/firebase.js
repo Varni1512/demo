@@ -23,18 +23,25 @@ import {
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-// Read Firebase configuration from environment variables
+// Read Firebase configuration dynamically (supports GoDaddy server-injected window.__ENV__ and local import.meta.env)
+const getEnv = (key) => {
+  if (typeof window !== "undefined" && window.__ENV__?.[key]) {
+    return window.__ENV__[key];
+  }
+  return import.meta.env[key] || "";
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: getEnv("VITE_FIREBASE_API_KEY"),
+  authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: getEnv("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
+  appId: getEnv("VITE_FIREBASE_APP_ID"),
 };
 
 /**
- * Checks whether valid Firebase credentials are provided in .env
+ * Checks whether valid Firebase credentials are provided
  */
 export const isFirebaseConfigured = () => {
   const apiKey = firebaseConfig.apiKey;
@@ -57,22 +64,9 @@ try {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
-  } else {
-    // Graceful fallback dummy app config so app doesn't crash before keys are added
-    const fallbackConfig = {
-      apiKey: "AIzaSyMockKeyForInitialization00000",
-      authDomain: "swadeshvaani-mock.firebaseapp.com",
-      projectId: "swadeshvaani-mock",
-      storageBucket: "swadeshvaani-mock.appspot.com",
-      messagingSenderId: "000000000000",
-      appId: "1:000000000000:web:0000000000000000000000",
-    };
-    app = getApps().length > 0 ? getApp() : initializeApp(fallbackConfig);
-    db = getFirestore(app);
-    auth = getAuth(app);
   }
 } catch (e) {
-  console.warn("[Firebase] Initialization warning (offline/mock mode):", e.message);
+  console.warn("[Firebase] Initialization warning:", e.message);
 }
 
 export { app, db, auth };

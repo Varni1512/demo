@@ -3,9 +3,16 @@
  * Enables direct client-side unsigned image upload to Cloudinary CDN.
  */
 
+const getEnv = (key) => {
+  if (typeof window !== "undefined" && window.__ENV__?.[key]) {
+    return window.__ENV__[key];
+  }
+  return import.meta.env[key] || "";
+};
+
 export const isCloudinaryConfigured = () => {
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  const cloudName = getEnv("VITE_CLOUDINARY_CLOUD_NAME");
+  const uploadPreset = getEnv("VITE_CLOUDINARY_UPLOAD_PRESET");
   return Boolean(
     cloudName &&
     uploadPreset &&
@@ -28,8 +35,8 @@ export const uploadToCloudinary = async (
     return { success: false, error: "No image provided" };
   }
 
-  const cloudName = (import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "").trim();
-  const uploadPreset = (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "").trim();
+  const cloudName = (getEnv("VITE_CLOUDINARY_CLOUD_NAME") || "").trim();
+  const uploadPreset = (getEnv("VITE_CLOUDINARY_UPLOAD_PRESET") || "").trim();
 
   if (!cloudName || !uploadPreset || cloudName.includes("your_") || uploadPreset.includes("your_")) {
     console.warn("[Cloudinary] Cloudinary keys not configured in .env. Using fallback image storage.");

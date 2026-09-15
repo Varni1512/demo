@@ -1443,6 +1443,9 @@ if (staticDistPath) {
           .replace("</head>", `${dynamicMetaTags}\n  </head>`);
       }
 
+      // Inject environment variables from server process.env into HTML for browser
+      injectedHtml = injectEnvIntoHtml(injectedHtml);
+
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
@@ -1463,6 +1466,38 @@ if (staticDistPath) {
     return res.status(404).send("Not found");
   });
 
+  // Dynamic Client Configuration Endpoint (reads from GoDaddy Secrets in process.env)
+  app.get("/api/config", (req, res) => {
+    return res.json({
+      VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || "",
+      VITE_FIREBASE_AUTH_DOMAIN: process.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || "",
+      VITE_FIREBASE_PROJECT_ID: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "",
+      VITE_FIREBASE_STORAGE_BUCKET: process.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || "",
+      VITE_FIREBASE_MESSAGING_SENDER_ID: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || "",
+      VITE_FIREBASE_APP_ID: process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || "",
+      VITE_CLOUDINARY_CLOUD_NAME: process.env.VITE_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || "",
+      VITE_CLOUDINARY_UPLOAD_PRESET: process.env.VITE_CLOUDINARY_UPLOAD_PRESET || process.env.CLOUDINARY_UPLOAD_PRESET || "",
+      VITE_CLOUDINARY_API_KEY: process.env.VITE_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || "",
+    });
+  });
+
+  // Helper function to inject server process.env into HTML for client-side consumption
+  function injectEnvIntoHtml(html) {
+    const clientEnv = {
+      VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || "",
+      VITE_FIREBASE_AUTH_DOMAIN: process.env.VITE_FIREBASE_AUTH_DOMAIN || process.env.FIREBASE_AUTH_DOMAIN || "",
+      VITE_FIREBASE_PROJECT_ID: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "",
+      VITE_FIREBASE_STORAGE_BUCKET: process.env.VITE_FIREBASE_STORAGE_BUCKET || process.env.FIREBASE_STORAGE_BUCKET || "",
+      VITE_FIREBASE_MESSAGING_SENDER_ID: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || process.env.FIREBASE_MESSAGING_SENDER_ID || "",
+      VITE_FIREBASE_APP_ID: process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_APP_ID || "",
+      VITE_CLOUDINARY_CLOUD_NAME: process.env.VITE_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || "",
+      VITE_CLOUDINARY_UPLOAD_PRESET: process.env.VITE_CLOUDINARY_UPLOAD_PRESET || process.env.CLOUDINARY_UPLOAD_PRESET || "",
+      VITE_CLOUDINARY_API_KEY: process.env.VITE_CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY || "",
+    };
+    const envScript = `<script>window.__ENV__=${JSON.stringify(clientEnv)};</script>`;
+    return html.replace("</head>", `${envScript}\n  </head>`);
+  }
+
   app.get("*", (req, res, next) => {
     if (
       req.path.startsWith("/api") ||
@@ -1473,10 +1508,25 @@ if (staticDistPath) {
     ) {
       return next();
     }
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
-    res.sendFile(path.join(staticDistPath, "index.html"));
+    const indexPath = path.join(staticDistPath, "index.html");
+    if (!fs.existsSync(indexPath)) {
+      return res.status(404).send("Not found");
+    }
+    try {
+      let html = fs.readFileSync(indexPath, "utf-8");
+      html = injectEnvIntoHtml(html);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      return res.send(html);
+    } catch (err) {
+      console.error("Error serving index.html with env:", err);
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      return res.sendFile(indexPath);
+    }
   });
 } else {
   console.warn("⚠️ Warning: dist/index.html not found. Server running in API-only mode.");
