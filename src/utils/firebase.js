@@ -31,26 +31,25 @@ const getEnv = (key) => {
   return import.meta.env[key] || "";
 };
 
-const firebaseConfig = {
+export const getFirebaseConfig = () => ({
   apiKey: getEnv("VITE_FIREBASE_API_KEY"),
   authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN"),
   projectId: getEnv("VITE_FIREBASE_PROJECT_ID"),
   storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET"),
   messagingSenderId: getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
   appId: getEnv("VITE_FIREBASE_APP_ID"),
-};
+});
 
 /**
  * Checks whether valid Firebase credentials are provided
  */
 export const isFirebaseConfigured = () => {
-  const apiKey = firebaseConfig.apiKey;
-  const projectId = firebaseConfig.projectId;
+  const cfg = getFirebaseConfig();
   return Boolean(
-    apiKey &&
-    projectId &&
-    !apiKey.includes("your_") &&
-    !projectId.includes("your_")
+    cfg.apiKey &&
+    cfg.projectId &&
+    !cfg.apiKey.includes("your_") &&
+    !cfg.projectId.includes("your_")
   );
 };
 
@@ -59,14 +58,44 @@ let app = null;
 let db = null;
 let auth = null;
 
+export const ensureFirebase = async () => {
+  if (db) return db;
+  // If not configured yet, fetch dynamically from server /api/config
+  if (!isFirebaseConfigured() && typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/config");
+      if (res.ok) {
+        const data = await res.json();
+        window.__ENV__ = { ...(window.__ENV__ || {}), ...data };
+      }
+    } catch (e) {
+      // Offline fallback
+    }
+  }
+
+  if (isFirebaseConfigured() && !db) {
+    try {
+      const cfg = getFirebaseConfig();
+      app = getApps().length > 0 ? getApp() : initializeApp(cfg);
+      db = getFirestore(app);
+      auth = getAuth(app);
+    } catch (e) {
+      console.warn("[Firebase] Initialization warning:", e.message);
+    }
+  }
+  return db;
+};
+
+// Initial sync attempt
 try {
   if (isFirebaseConfigured()) {
-    app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    const cfg = getFirebaseConfig();
+    app = getApps().length > 0 ? getApp() : initializeApp(cfg);
     db = getFirestore(app);
     auth = getAuth(app);
   }
 } catch (e) {
-  console.warn("[Firebase] Initialization warning:", e.message);
+  console.warn("[Firebase] Initial setup notice:", e.message);
 }
 
 export { app, db, auth };
@@ -76,6 +105,7 @@ export { app, db, auth };
 // ==========================================
 
 export const getArticlesFromFirestore = async () => {
+  await ensureFirebase();
   if (!isFirebaseConfigured() || !db) return null;
   try {
     const q = query(collection(db, "articles"));
