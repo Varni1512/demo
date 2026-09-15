@@ -3,8 +3,11 @@
  * Handles unified credential verification, session management, and access guards.
  */
 
-import { convex } from "./convexClient";
-import { api } from "../../convex/_generated/api";
+import {
+  loginAdminFromFirestore,
+  loginUserFromFirestore,
+  registerUserInFirestore,
+} from "./firebase";
 import { safeStorage, safeSessionStorage } from "./safeStorage";
 
 const ADMIN_STORAGE_KEY = "savdeshvani_admin_auth";
@@ -87,23 +90,20 @@ export const authenticateAccount = async (identifier, password, rememberMe = fal
   const cleanPass = String(password).trim();
   const cleanPassNoSpaces = cleanPass.replace(/\s+/g, "");
 
-  // 1. Try Convex database authentication
+  // 1. Try Firestore database authentication
   try {
-    const convexRes = await convex.mutation(api.adminAuth.login, {
-      username: cleanId,
-      password: cleanPass,
-    });
-    if (convexRes && convexRes.success) {
+    const adminRes = await loginAdminFromFirestore(cleanId, cleanPass);
+    if (adminRes && adminRes.success) {
       const adminSession = {
         authenticated: true,
-        token: convexRes.user?.token || `sv-admin-${Date.now()}`,
+        token: adminRes.user?.token || `sv-admin-${Date.now()}`,
         loginTime: new Date().toISOString(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         user: {
           email: DEFAULT_CREDENTIALS.email,
-          username: convexRes.user?.username || cleanId,
-          name: DEFAULT_CREDENTIALS.name,
-          role: convexRes.user?.role || "admin",
+          username: adminRes.user?.username || cleanId,
+          name: adminRes.user?.name || DEFAULT_CREDENTIALS.name,
+          role: adminRes.user?.role || "admin",
         },
       };
 
@@ -125,7 +125,7 @@ export const authenticateAccount = async (identifier, password, rememberMe = fal
         user: adminSession.user,
       };
     }
-  } catch (convexErr) {
+  } catch (firestoreErr) {
     // Fallback to Express backend or local auth
   }
 
@@ -267,12 +267,9 @@ export const authenticateAccount = async (identifier, password, rememberMe = fal
   const formattedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
   const userEmail = cleanId.includes("@") ? cleanId : `${cleanId}@reader.swadeshvaani.in`;
 
-  // 1. Try Convex users table authentication / registration
+  // 1. Try Firestore users table authentication / registration
   try {
-    const userRes = await convex.mutation(api.users.login, {
-      emailOrPhone: cleanId,
-      password: cleanPass,
-    });
+    const userRes = await loginUserFromFirestore(cleanId, cleanPass);
 
     if (userRes && userRes.success) {
       const userSession = {
@@ -293,8 +290,8 @@ export const authenticateAccount = async (identifier, password, rememberMe = fal
         user: userRes.user,
       };
     } else if (userRes && !userRes.success && userRes.message && userRes.message.includes("उपयोगकर्ता नहीं मिला")) {
-      // Auto-register new reader in Convex users table
-      const regRes = await convex.mutation(api.users.register, {
+      // Auto-register new reader in Firestore users table
+      const regRes = await registerUserInFirestore({
         name: formattedName,
         email: userEmail,
         password: cleanPass,
@@ -322,7 +319,7 @@ export const authenticateAccount = async (identifier, password, rememberMe = fal
       }
     }
   } catch (err) {
-    // Convex offline or local fallback
+    // Firestore offline or local fallback
   }
 
   // 2. Client-side fallback session

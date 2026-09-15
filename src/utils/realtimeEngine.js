@@ -14,8 +14,12 @@ import {
   syncSubscribersFromServer,
   syncNotificationsFromServer,
 } from "../data/newsData";
-import { convex } from "./convexClient";
-import { api } from "../../convex/_generated/api";
+import {
+  subscribeArticlesFromFirestore,
+  subscribeAdvertisementsFromFirestore,
+  subscribeSubscribersFromFirestore,
+  subscribeNotificationsFromFirestore,
+} from "./firebase";
 
 let isInitialized = false;
 let eventSource = null;
@@ -66,39 +70,37 @@ export const initRealtimeEngine = () => {
   if (isInitialized || typeof window === "undefined") return;
   isInitialized = true;
 
-  // 1. Initialize Convex Real-Time WebSocket live subscriptions
+  // 1. Initialize Firebase Firestore Real-Time live subscriptions
   try {
-    if (typeof convex.onUpdate === "function") {
-      convex.onUpdate(api.articles.get, {}, (freshArticles) => {
-        if (Array.isArray(freshArticles)) {
-          safeStorage.setItem("savdeshvani_articles_store", JSON.stringify(freshArticles));
-          window.dispatchEvent(new Event("sv_articles_change"));
-        }
-      });
+    subscribeArticlesFromFirestore((freshArticles) => {
+      if (Array.isArray(freshArticles) && freshArticles.length > 0) {
+        safeStorage.setItem("savdeshvani_articles_store", JSON.stringify(freshArticles));
+        window.dispatchEvent(new Event("sv_articles_change"));
+      }
+    });
 
-      convex.onUpdate(api.advertisements.get, {}, (freshAds) => {
-        if (Array.isArray(freshAds)) {
-          safeStorage.setItem("savdeshvani_advertisements", JSON.stringify(freshAds));
-          window.dispatchEvent(new Event("sv_ads_change"));
-        }
-      });
+    subscribeAdvertisementsFromFirestore((freshAds) => {
+      if (Array.isArray(freshAds) && freshAds.length > 0) {
+        safeStorage.setItem("savdeshvani_advertisements", JSON.stringify(freshAds));
+        window.dispatchEvent(new Event("sv_ads_change"));
+      }
+    });
 
-      convex.onUpdate(api.subscribers.get, {}, (freshSubs) => {
-        if (Array.isArray(freshSubs)) {
-          safeStorage.setItem("savdeshvani_subscribers", JSON.stringify(freshSubs));
-          window.dispatchEvent(new Event("sv_subscribers_change"));
-        }
-      });
+    subscribeSubscribersFromFirestore((freshSubs) => {
+      if (Array.isArray(freshSubs) && freshSubs.length > 0) {
+        safeStorage.setItem("savdeshvani_subscribers", JSON.stringify(freshSubs));
+        window.dispatchEvent(new Event("sv_subscribers_change"));
+      }
+    });
 
-      convex.onUpdate(api.notifications.get, {}, (freshNotifs) => {
-        if (Array.isArray(freshNotifs)) {
-          safeStorage.setItem("savdeshvani_notifications", JSON.stringify(freshNotifs));
-          window.dispatchEvent(new Event("sv_notifications_change"));
-        }
-      });
-    }
+    subscribeNotificationsFromFirestore((freshNotifs) => {
+      if (Array.isArray(freshNotifs) && freshNotifs.length > 0) {
+        safeStorage.setItem("savdeshvani_notifications", JSON.stringify(freshNotifs));
+        window.dispatchEvent(new Event("sv_notifications_change"));
+      }
+    });
   } catch (err) {
-    console.warn("Convex live query fallback:", err);
+    console.warn("Firestore live query fallback:", err);
   }
 
   // 2. Initialize BroadcastChannel for cross-tab / incognito instant communication
@@ -117,9 +119,6 @@ export const initRealtimeEngine = () => {
 
   // 3. Initial full synchronization
   performFullSync();
-
-  // 4. Connect to SSE Stream
-  connectSSE();
 
   // 4. Cross-tab storage synchronizer (standard tabs)
   window.addEventListener("storage", (e) => {
@@ -141,9 +140,6 @@ export const initRealtimeEngine = () => {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         performFullSync();
-        if (!eventSource) {
-          connectSSE();
-        }
       }
     });
   }
@@ -151,17 +147,11 @@ export const initRealtimeEngine = () => {
   window.addEventListener("online", () => {
     reconnectAttempts = 0;
     performFullSync();
-    connectSSE();
   });
 
   window.addEventListener("focus", () => {
     performFullSync();
   });
-
-  // 6. Resilient 6-second background heartbeat sync for mobile networks and firewalls
-  heartbeatInterval = setInterval(() => {
-    performFullSync();
-  }, 6000);
 };
 
 export const performFullSync = () => {

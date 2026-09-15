@@ -11,16 +11,17 @@
     "start": "node server/index.js",
     "server": "node server/index.js",
     "package:godaddy": "vite build && node scripts/build-godaddy-zip.js",
+    "seed:firebase": "node scripts/seed-articles-to-firebase.js",
     "preview": "vite preview"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "@whiskeysockets/baileys": "^6.7.9",
     "autoprefixer": "^10.4.20",
-    "convex": "^1.45.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "firebase": "^12.19.0",
     "lucide-react": "^1.30.0",
     "nodemailer": "^9.0.5",
     "pino": "^9.6.0",

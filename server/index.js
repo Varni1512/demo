@@ -12,10 +12,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
-import { ConvexHttpClient } from "convex/browser";
-import { api } from "../convex/_generated/api.js";
 
-const convexClient = new ConvexHttpClient(process.env.VITE_CONVEX_URL || "https://original-raven-947.convex.cloud");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,6 +74,24 @@ app.post("/api/upload", (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// GET /api/backup-articles - Stream / read all 109 backup articles from convex-data-backup
+app.get("/api/backup-articles", (req, res) => {
+  try {
+    const backupPath = path.join(__dirname, "..", "convex-data-backup", "articles", "documents.jsonl");
+    if (!fs.existsSync(backupPath)) {
+      return res.status(404).json({ success: false, error: "Backup file not found" });
+    }
+    const content = fs.readFileSync(backupPath, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim().length > 0);
+    const articles = lines.map((l) => JSON.parse(l));
+    return res.json({ success: true, total: articles.length, articles });
+  } catch (err) {
+    console.error("Error reading backup articles:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // Top-level health checks for GoDaddy PaaS / Cloud Load Balancers
 app.get(["/health", "/healthz", "/_health", "/ping"], (req, res) => {
@@ -436,14 +451,6 @@ function saveDeletedArticleIds(ids) {
 // GET /api/articles - Retrieve all articles (with deletedIds)
 app.get("/api/articles", async (req, res) => {
   let articles = [];
-  try {
-    const convexArticles = await convexClient.query(api.articles.get);
-    if (Array.isArray(convexArticles) && convexArticles.length > 0) {
-      articles = convexArticles;
-    }
-  } catch (err) {
-    console.error("Error fetching articles from Convex:", err);
-  }
 
   if (articles.length === 0) {
     articles = getStoredArticles();
@@ -475,18 +482,6 @@ app.get("/api/articles/:id", async (req, res) => {
   }
 
   let article = null;
-  try {
-    const convexArticles = await convexClient.query(api.articles.get);
-    if (Array.isArray(convexArticles)) {
-      article = convexArticles.find(
-        (a) =>
-          String(a.id).toLowerCase() === searchKey ||
-          (a.slug && a.slug.toLowerCase() === searchKey)
-      );
-    }
-  } catch (err) {
-    console.error("Error fetching article by ID from Convex:", err);
-  }
 
   if (!article) {
     const articles = getStoredArticles();
@@ -593,14 +588,6 @@ function saveDeletedAdIds(ids) {
 
 app.get("/api/advertisements", async (req, res) => {
   let ads = [];
-  try {
-    const convexAds = await convexClient.query(api.advertisements.get);
-    if (Array.isArray(convexAds) && convexAds.length > 0) {
-      ads = convexAds;
-    }
-  } catch (err) {
-    console.error("Error fetching ads from Convex:", err);
-  }
 
   if (ads.length === 0) {
     ads = getStoredAds();
@@ -1354,18 +1341,8 @@ if (staticDistPath) {
       const rawHtml = fs.readFileSync(indexHtmlPath, "utf-8");
       const searchKey = decodeURIComponent(String(articleId || "")).trim().toLowerCase();
       
-      // Fetch article from Convex DB
+      // Fetch article from stored articles
       let article = null;
-      try {
-        const convexArticles = await convexClient.query(api.articles.get);
-        article = convexArticles.find(
-          (a) =>
-            String(a.id).toLowerCase() === searchKey ||
-            (a.slug && a.slug.toLowerCase() === searchKey)
-        );
-      } catch (err) {
-        console.error("Error fetching article from Convex:", err);
-      }
 
       // Fallback to local JSON if Convex fails
       if (!article) {

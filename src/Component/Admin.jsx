@@ -85,8 +85,13 @@ import {
   getAdminUser,
   logoutAdmin,
 } from "../utils/auth";
-import { convex } from "../utils/convexClient";
-import { api } from "../../convex/_generated/api";
+import {
+  getUsersFromFirestore,
+  deleteUserFromFirestore,
+  subscribeUsersFromFirestore,
+  saveArticleToFirestore,
+} from "../utils/firebase";
+import { uploadToCloudinary, isCloudinaryConfigured } from "../utils/cloudinary";
 import { useLanguage } from "../context/LanguageContext";
 import { compressImageFile, uploadImageToServer } from "../utils/imageOptimizer";
 import { toHindiNumber } from "../utils/hindiNumbers";
@@ -152,11 +157,11 @@ export default function Admin() {
 
   useEffect(() => {
     try {
-      convex.query(api.users.get).then((list) => {
+      getUsersFromFirestore().then((list) => {
         if (Array.isArray(list)) setUsersList(list);
       }).catch(() => {});
 
-      const unsubscribe = convex.onUpdate(api.users.get, {}, (list) => {
+      const unsubscribe = subscribeUsersFromFirestore((list) => {
         if (Array.isArray(list)) setUsersList(list);
       });
       return () => unsubscribe?.();
@@ -251,6 +256,56 @@ export default function Admin() {
     );
   }, [newsList, searchTerm]);
 
+  // One-click Backup Articles Importer (Seeds 109 articles into Firebase Firestore)
+  const [isImportingBackup, setIsImportingBackup] = useState(false);
+  const handleImportBackupToFirebase = async () => {
+    if (!window.confirm(language === "hi" ? "क्या आप बैकअप से सभी 109 समाचार Firebase में लोड करना चाहते हैं?" : "Do you want to import all 109 backup articles into Firebase?")) {
+      return;
+    }
+    setIsImportingBackup(true);
+    try {
+      showToast(language === "hi" ? "बैकअप फ़ाइल पढ़ी जा रही है..." : "Reading backup articles...", "info");
+      const res = await fetch("/api/backup-articles");
+      if (!res.ok) {
+        throw new Error("Could not fetch backup articles from server");
+      }
+      const data = await res.json();
+      if (!data.success || !Array.isArray(data.articles)) {
+        throw new Error(data.error || "No articles in backup");
+      }
+
+      showToast(language === "hi" ? `${data.articles.length} समाचार Firebase में सेव हो रहे हैं...` : `Saving ${data.articles.length} articles to Firebase...`, "info");
+      let count = 0;
+      for (const raw of data.articles) {
+        const articleToSave = {
+          id: raw.customId || raw._id,
+          title: raw.title || "",
+          slug: raw.slug || "",
+          category: raw.category || "झारखंड",
+          district: raw.district || "Ranchi",
+          subDistrict: raw.subDistrict || "",
+          author: raw.author || raw.reporter || "स्वदेश वाणी ब्यूरो",
+          reporter: raw.reporter || raw.author || "स्वदेश वाणी ब्यूरो",
+          excerpt: raw.excerpt || "",
+          content: raw.content || "",
+          image: raw.image || "",
+          date: raw.date || "",
+          readTime: raw.readTime || "2 min",
+          status: "Published",
+        };
+        await saveArticleToFirestore(articleToSave);
+        count++;
+      }
+      refreshArticles();
+      showToast(language === "hi" ? `🎉 ${count} समाचार सफलतापूर्वक Firebase में इम्पोर्ट हो गए!` : `🎉 Successfully imported ${count} articles to Firebase!`, "success");
+    } catch (err) {
+      console.error("Backup import error:", err);
+      showToast(err.message || "इम्पोर्ट विफल रहा।", "error");
+    } finally {
+      setIsImportingBackup(false);
+    }
+  };
+
   // Form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -280,11 +335,27 @@ export default function Admin() {
         targetMaxSizeBytes: 180 * 1024,
       });
 
+      let finalImageUrl = compressedDataUrl;
+
+      // 2. Upload to Cloudinary CDN if configured
+      if (isCloudinaryConfigured()) {
+        showToast(language === "hi" ? "Cloudinary पर अपलोड हो रहा है..." : "Uploading to Cloudinary...", "info");
+        const cloudRes = await uploadToCloudinary(compressedDataUrl, { folder: "swadeshvaani/articles" });
+        if (cloudRes.success && cloudRes.url) {
+          finalImageUrl = cloudRes.url;
+          showToast(language === "hi" ? "तस्वीर Cloudinary पर सुरक्षित स्टोर हो गई!" : "Image stored on Cloudinary CDN!", "success");
+        } else {
+          console.warn("Cloudinary upload fallback:", cloudRes.error);
+        }
+      }
+
       setFormData((prev) => ({
         ...prev,
-        image: compressedDataUrl,
+        image: finalImageUrl,
       }));
-      showToast(language === "hi" ? "तस्वीर सफलतापूर्वक प्रोसेस एवं तैयार हो गई!" : "Image processed and optimized successfully!", "success");
+      if (!isCloudinaryConfigured()) {
+        showToast(language === "hi" ? "तस्वीर सफलतापूर्वक प्रोसेस एवं तैयार हो गई!" : "Image processed and optimized successfully!", "success");
+      }
     } catch (err) {
       console.error("Image upload failed:", err);
       showToast(language === "hi" ? "तस्वीर प्रोसेस करने में विफल।" : "Failed to process image.", "error");
@@ -308,9 +379,17 @@ export default function Admin() {
         targetMaxSizeBytes: 180 * 1024,
       });
 
+      let finalAdUrl = compressedDataUrl;
+      if (isCloudinaryConfigured()) {
+        const cloudRes = await uploadToCloudinary(compressedDataUrl, { folder: "swadeshvaani/advertisements" });
+        if (cloudRes.success && cloudRes.url) {
+          finalAdUrl = cloudRes.url;
+        }
+      }
+
       setAdForm((prev) => ({
         ...prev,
-        image: compressedDataUrl,
+        image: finalAdUrl,
       }));
       showToast(language === "hi" ? "विज्ञापन बैनर तैयार हो गया!" : "Ad banner optimized successfully!", "success");
     } catch (err) {
@@ -1110,6 +1189,15 @@ export default function Admin() {
                   </span>
 
                   <button
+                    onClick={handleImportBackupToFirebase}
+                    disabled={isImportingBackup}
+                    className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                    title={language === "hi" ? "बैकअप से सभी समाचार Firebase में डालें" : "Import all backup articles to Firebase"}
+                  >
+                    <FaCloudUploadAlt /> {isImportingBackup ? (language === "hi" ? "इम्पोर्ट हो रहा है..." : "Importing...") : (language === "hi" ? "बैकअप न्यूज़ डालें" : "Import Backup")}
+                  </button>
+
+                  <button
                     onClick={() => {
                       setEditingArticleId(null);
                       setFormData(initialFormState);
@@ -1832,7 +1920,7 @@ export default function Admin() {
                     {language === "hi" ? "पंजीकृत उपयोगकर्ता (Registered Readers & Users)" : "Registered Users & Readers"}
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {language === "hi" ? "वेबसाइट पर लॉगिन / साइनअप करने वाले सामान्य पाठकों का विवरण (Convex Database)" : "Registered reader accounts stored in real-time Convex database"}
+                    {language === "hi" ? "वेबसाइट पर लॉगिन / साइनअप करने वाले सामान्य पाठकों का विवरण (Firebase Database)" : "Registered reader accounts stored in real-time Firebase database"}
                   </p>
                 </div>
 
@@ -1894,7 +1982,7 @@ export default function Admin() {
                                 onClick={async () => {
                                   if (window.confirm("क्या आप वाकई इस उपयोगकर्ता को हटाना चाहते हैं?")) {
                                     try {
-                                      await convex.mutation(api.users.remove, { id: String(usr.id) });
+                                      await deleteUserFromFirestore(String(usr.id));
                                       setUsersList((prev) => prev.filter((u) => u.id !== usr.id));
                                       showToast("उपयोगकर्ता हटा दिया गया।", "info");
                                     } catch (err) {

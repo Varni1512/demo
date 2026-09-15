@@ -274,6 +274,7 @@ const Home = () => {
   const { language, t } = useLanguage();
   const [newsData, setNewsData] = useState(() => getAllArticles());
   const [ads, setAds] = useState(() => getAdvertisements());
+  const [loading, setLoading] = useState(() => newsData.length === 0);
 
   // Subscribe form state
   const [subMethod, setSubMethod] = useState("phone"); // "phone" | "email"
@@ -284,18 +285,27 @@ const Home = () => {
 
   useEffect(() => {
     // Initial load from local cache
-    setNewsData(getAllArticles());
+    const cached = getAllArticles();
+    setNewsData(cached);
     setAds(getAdvertisements());
+    if (cached.length > 0) {
+      setLoading(false);
+    }
 
     // Fetch latest articles from server
     syncArticlesFromServer().then((fresh) => {
-      if (Array.isArray(fresh)) {
+      if (Array.isArray(fresh) && fresh.length > 0) {
         setNewsData(fresh);
       }
+      setLoading(false);
     });
 
     const handleArticlesChange = () => {
-      setNewsData(getAllArticles());
+      const fresh = getAllArticles();
+      setNewsData(fresh);
+      if (fresh.length > 0) {
+        setLoading(false);
+      }
     };
 
     const handleAdsChange = () => {
@@ -401,7 +411,16 @@ const Home = () => {
     <div className="min-h-screen bg-slate-50">
       {/* Hero section */}
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-        {mainNews ? (
+        {loading ? (
+          <div className="grid gap-6 lg:grid-cols-3 animate-pulse">
+            <div className="lg:col-span-2 h-96 bg-slate-200/70 rounded-3xl" />
+            <div className="space-y-4">
+              <div className="h-28 bg-slate-200/70 rounded-2xl" />
+              <div className="h-28 bg-slate-200/70 rounded-2xl" />
+              <div className="h-28 bg-slate-200/70 rounded-2xl" />
+            </div>
+          </div>
+        ) : mainNews ? (
           <div className="grid gap-6 lg:grid-cols-3">
           {/* Main news */}
           <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">

@@ -11,8 +11,7 @@ import {
   Info,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
-import { convex } from "../utils/convexClient";
-import { api } from "../../convex/_generated/api";
+import { saveNotificationToFirestore } from "../utils/firebase";
 
 const Advertisement = () => {
   const { language, t } = useLanguage();
@@ -127,16 +126,16 @@ const Advertisement = () => {
         }
       }
 
-      // 3. Dispatch Live Notification into Convex Cloud Database for Admin Panel
+      // 3. Dispatch Live Notification into Firebase Cloud Database for Admin Panel
       try {
-        await convex.mutation(api.notifications.send, {
+        await saveNotificationToFirestore({
           title: `📢 नया विज्ञापन अनुरोध: ${formData.businessName || formData.name}`,
           message: `फ़ोन: ${formData.phone} | प्रकार: ${formData.advertisementType} | बजट: ${formData.budget || "N/A"}`,
           type: "Advertisement",
           target: "admin",
         });
-      } catch (convexErr) {
-        console.warn("Convex notification error:", convexErr);
+      } catch (fireErr) {
+        console.warn("Firestore notification error:", fireErr);
       }
 
       setSubmitted(true);

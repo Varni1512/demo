@@ -21,8 +21,7 @@ import {
   FaCopy,
 } from "react-icons/fa";
 import { getArticleById, getAllArticles, syncArticlesFromServer, resolveArticleImage, getCategoryFallbackImage } from "../data/newsData";
-import { convex } from "../utils/convexClient";
-import { api } from "../../convex/_generated/api";
+import { getArticleByIdFromFirestore } from "../utils/firebase";
 import { safeStorage } from "../utils/safeStorage";
 import SubscribeSection from "./SubscribeSection";
 
@@ -48,21 +47,17 @@ export default function ArticleDetail() {
     } else {
       setLoading(true);
 
-      // 1. Direct Convex Real-Time DB Query for Incognito / Cold Hits
-      // Wrapping with Promise.race to avoid hanging if Convex WebSocket fails on iOS Safari
-      Promise.race([
-        convex.query(api.articles.getById, { id: String(id) }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
-      ])
-        .then((convexArt) => {
-          if (convexArt) {
-            setArticle(convexArt);
+      // 1. Direct Firestore DB Query for Incognito / Cold Hits
+      getArticleByIdFromFirestore(id)
+        .then((fireArt) => {
+          if (fireArt) {
+            setArticle(fireArt);
             setLoading(false);
 
             try {
               const saved = JSON.parse(safeStorage.getItem("savdeshvani_articles_store") || "[]");
-              if (!saved.some((a) => String(a.id) === String(convexArt.id))) {
-                safeStorage.setItem("savdeshvani_articles_store", JSON.stringify([convexArt, ...saved]));
+              if (!saved.some((a) => String(a.id) === String(fireArt.id))) {
+                safeStorage.setItem("savdeshvani_articles_store", JSON.stringify([fireArt, ...saved]));
                 window.dispatchEvent(new Event("sv_articles_change"));
               }
             } catch {}

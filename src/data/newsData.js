@@ -32,8 +32,23 @@ import ratu from "../Component/photos/ratu.jpeg";
 import trikut from "../Component/photos/trikut.jpg";
 export { toHindiNumber } from "../utils/hindiNumbers";
 import { broadcastLocalEvent } from "../utils/realtimeEngine";
-import { convex, convexHttp } from "../utils/convexClient";
-import { api } from "../../convex/_generated/api";
+import {
+  getArticlesFromFirestore,
+  saveArticleToFirestore,
+  deleteArticleFromFirestore,
+  getAdvertisementsFromFirestore,
+  saveAdvertisementToFirestore,
+  deleteAdvertisementFromFirestore,
+  toggleAdStatusInFirestore,
+  recordAdClickInFirestore,
+  getNotificationsFromFirestore,
+  saveNotificationToFirestore,
+  markNotificationReadInFirestore,
+  getSubscribersFromFirestore,
+  saveSubscriberToFirestore,
+  deleteSubscriberFromFirestore,
+  isFirebaseConfigured,
+} from "../utils/firebase";
 import { safeStorage } from "../utils/safeStorage";
 
 export const JHARKHAND_DISTRICTS = [
@@ -578,46 +593,35 @@ const DELETED_ADS_KEY = "savdeshvani_deleted_ad_ids";
 
 export const syncAdvertisementsFromServer = async () => {
   try {
-    // 1. Try Convex live database query via HTTP client first (fast & reliable)
+    // 1. Try Firebase Firestore query first (fast & reliable)
     try {
-      const convexAds = await convexHttp.query(api.advertisements.get);
-      if (Array.isArray(convexAds) && convexAds.length > 0) {
-        safeStorage.setItem(ADVERTISEMENTS_KEY, JSON.stringify(convexAds));
+      const firestoreAds = await getAdvertisementsFromFirestore();
+      if (Array.isArray(firestoreAds) && firestoreAds.length > 0) {
+        safeStorage.setItem(ADVERTISEMENTS_KEY, JSON.stringify(firestoreAds));
         window.dispatchEvent(new Event("sv_ads_change"));
         return getAdvertisements();
       }
     } catch {}
 
-    // Fallback to convex websocket client
-    try {
-      const convexAds = await Promise.race([
-        convex.query(api.advertisements.get),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
-      ]);
-      if (Array.isArray(convexAds) && convexAds.length > 0) {
-        safeStorage.setItem(ADVERTISEMENTS_KEY, JSON.stringify(convexAds));
-        window.dispatchEvent(new Event("sv_ads_change"));
-        return getAdvertisements();
-      }
-    } catch {}
-
-    // 2. Fallback to API server
-    const res = await fetch("/api/advertisements");
-    if (res.ok) {
-      const data = await res.json();
-      if (data) {
-        if (Array.isArray(data.deletedIds)) {
-          const currentDeleted = new Set(
-            JSON.parse(safeStorage.getItem(DELETED_ADS_KEY) || "[]").map(String)
-          );
-          data.deletedIds.forEach((id) => currentDeleted.add(String(id)));
-          safeStorage.setItem(DELETED_ADS_KEY, JSON.stringify([...currentDeleted]));
+    // 2. Fallback to API server only if Firebase is not active
+    if (!isFirebaseConfigured()) {
+      const res = await fetch("/api/advertisements");
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          if (Array.isArray(data.deletedIds)) {
+            const currentDeleted = new Set(
+              JSON.parse(safeStorage.getItem(DELETED_ADS_KEY) || "[]").map(String)
+            );
+            data.deletedIds.forEach((id) => currentDeleted.add(String(id)));
+            safeStorage.setItem(DELETED_ADS_KEY, JSON.stringify([...currentDeleted]));
+          }
+          if (Array.isArray(data.advertisements)) {
+            safeStorage.setItem(ADVERTISEMENTS_KEY, JSON.stringify(data.advertisements));
+          }
+          window.dispatchEvent(new Event("sv_ads_change"));
+          return getAdvertisements();
         }
-        if (Array.isArray(data.advertisements)) {
-          safeStorage.setItem(ADVERTISEMENTS_KEY, JSON.stringify(data.advertisements));
-        }
-        window.dispatchEvent(new Event("sv_ads_change"));
-        return getAdvertisements();
       }
     }
   } catch (e) {}
@@ -693,19 +697,8 @@ export const saveAdvertisement = (adData) => {
     } catch {}
     window.dispatchEvent(new Event("sv_ads_change"));
 
-    // Persist to Convex Real-time DB
-    convex.mutation(api.advertisements.save, {
-      customId: adId,
-      title: adToSave.title,
-      sponsor: adToSave.sponsor,
-      tagline: adToSave.tagline,
-      position: adToSave.position,
-      image: adToSave.image,
-      link: adToSave.link,
-      status: adToSave.status,
-      clicks: Number(adToSave.clicks || 0),
-      impressions: Number(adToSave.impressions || 0),
-    }).catch(() => {});
+    // Persist to Firebase Firestore
+    saveAdvertisementToFirestore(adToSave).catch(() => {});
 
     // Async persist to Express server
     fetch("/api/advertisements", {
@@ -737,8 +730,8 @@ export const deleteAdvertisement = (id) => {
     } catch {}
     window.dispatchEvent(new Event("sv_ads_change"));
 
-    // Delete in Convex DB
-    convex.mutation(api.advertisements.remove, { id: idStr }).catch(() => {});
+    // Delete in Firebase Firestore
+    deleteAdvertisementFromFirestore(idStr).catch(() => {});
 
     fetch(`/api/advertisements/${encodeURIComponent(id)}`, {
       method: "DELETE",
@@ -767,8 +760,8 @@ export const toggleAdStatus = (id) => {
     } catch {}
     window.dispatchEvent(new Event("sv_ads_change"));
 
-    // Toggle in Convex DB
-    convex.mutation(api.advertisements.toggleStatus, { id: String(id) }).catch(() => {});
+    // Toggle in Firebase Firestore
+    toggleAdStatusInFirestore(String(id)).catch(() => {});
 
     fetch(`/api/advertisements/${encodeURIComponent(id)}/toggle`, {
       method: "POST",
@@ -797,8 +790,8 @@ export const recordAdClick = (id) => {
     } catch {}
     window.dispatchEvent(new Event("sv_ads_change"));
 
-    // Record in Convex DB
-    convex.mutation(api.advertisements.recordClick, { id: String(id) }).catch(() => {});
+    // Record in Firebase Firestore
+    recordAdClickInFirestore(String(id)).catch(() => {});
 
     fetch(`/api/advertisements/${encodeURIComponent(id)}/click`, {
       method: "POST",
@@ -900,13 +893,8 @@ export const addNotification = (article) => {
     // Dispatch global custom event for Navbar & UI reactivity
     window.dispatchEvent(new CustomEvent("sv_notification_received", { detail: newNotif }));
 
-    // Persist to Convex DB
-    convex.mutation(api.notifications.send, {
-      title: article.title || "ताज़ा समाचार प्रकाशित हुआ",
-      message: article.excerpt || article.title || "स्वदेश वाणी ताज़ा समाचार",
-      type: article.category || "Breaking",
-      target: "all",
-    }).catch(() => {});
+    // Persist to Firebase Firestore
+    saveNotificationToFirestore(newNotif).catch(() => {});
 
     // Browser Push / Web Notification
     if ("Notification" in window && Notification.permission === "granted") {
@@ -938,8 +926,8 @@ export const markNotificationAsRead = (id) => {
     safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("sv_notifications_change"));
 
-    // Convex mark read
-    convex.mutation(api.notifications.markRead, { id: String(id) }).catch(() => {});
+    // Firebase Firestore mark read
+    markNotificationReadInFirestore(String(id)).catch(() => {});
 
     return updated;
   } catch (e) {
@@ -964,24 +952,26 @@ export const markAllNotificationsAsRead = () => {
 
 export const syncNotificationsFromServer = async () => {
   try {
-    // 1. Try Convex query
+    // 1. Try Firebase Firestore query
     try {
-      const convexNotifs = await convex.query(api.notifications.get);
-      if (Array.isArray(convexNotifs) && convexNotifs.length > 0) {
-        safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(convexNotifs));
+      const firestoreNotifs = await getNotificationsFromFirestore();
+      if (Array.isArray(firestoreNotifs) && firestoreNotifs.length > 0) {
+        safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(firestoreNotifs));
         window.dispatchEvent(new Event("sv_notifications_change"));
         return getNotifications();
       }
     } catch {}
 
-    // 2. Fallback to API server
-    const res = await fetch("/api/notifications");
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.notifications)) {
-        safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(data.notifications));
-        window.dispatchEvent(new Event("sv_notifications_change"));
-        return getNotifications();
+    // 2. Fallback to API server only if Firebase is not active
+    if (!isFirebaseConfigured()) {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.notifications)) {
+          safeStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(data.notifications));
+          window.dispatchEvent(new Event("sv_notifications_change"));
+          return getNotifications();
+        }
       }
     }
   } catch (e) {}
@@ -1003,50 +993,39 @@ export const clearNotifications = () => {
 // Sync articles and deletions from backend server across all user devices
 export const syncArticlesFromServer = async () => {
   try {
-    // 1. Try Convex real-time DB query via HTTP client first (fast & reliable)
+    // 1. Try Firebase Firestore query first (fast & reliable)
     try {
-      const convexArticles = await convexHttp.query(api.articles.get);
-      if (Array.isArray(convexArticles) && convexArticles.length > 0) {
-        safeStorage.setItem(STORAGE_KEY, JSON.stringify(convexArticles));
+      const firestoreArticles = await getArticlesFromFirestore();
+      if (Array.isArray(firestoreArticles) && firestoreArticles.length > 0) {
+        safeStorage.setItem(STORAGE_KEY, JSON.stringify(firestoreArticles));
         window.dispatchEvent(new Event("sv_articles_change"));
         return getAllArticles();
       }
     } catch {}
 
-    // Fallback to convex websocket client
-    try {
-      const convexArticles = await Promise.race([
-        convex.query(api.articles.get),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
-      ]);
-      if (Array.isArray(convexArticles) && convexArticles.length > 0) {
-        safeStorage.setItem(STORAGE_KEY, JSON.stringify(convexArticles));
-        window.dispatchEvent(new Event("sv_articles_change"));
-        return getAllArticles();
-      }
-    } catch {}
+    // 2. Fallback to API server only if Firebase is not active
+    if (!isFirebaseConfigured()) {
+      const res = await fetch("/api/articles");
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          // 1. Sync deleted article IDs across devices so deleted news never reappears
+          if (Array.isArray(data.deletedIds)) {
+            const currentDeleted = new Set(
+              JSON.parse(safeStorage.getItem(DELETED_ARTICLES_KEY) || "[]").map(String)
+            );
+            data.deletedIds.forEach((id) => currentDeleted.add(String(id)));
+            safeStorage.setItem(DELETED_ARTICLES_KEY, JSON.stringify([...currentDeleted]));
+          }
 
-    // 2. Fallback to API server
-    const res = await fetch("/api/articles");
-    if (res.ok) {
-      const data = await res.json();
-      if (data) {
-        // 1. Sync deleted article IDs across devices so deleted news never reappears
-        if (Array.isArray(data.deletedIds)) {
-          const currentDeleted = new Set(
-            JSON.parse(safeStorage.getItem(DELETED_ARTICLES_KEY) || "[]").map(String)
-          );
-          data.deletedIds.forEach((id) => currentDeleted.add(String(id)));
-          safeStorage.setItem(DELETED_ARTICLES_KEY, JSON.stringify([...currentDeleted]));
+          // 2. Sync articles list (only store if server returned non-empty articles)
+          if (Array.isArray(data.articles) && data.articles.length > 0) {
+            safeStorage.setItem(STORAGE_KEY, JSON.stringify(data.articles));
+          }
+
+          window.dispatchEvent(new Event("sv_articles_change"));
+          return getAllArticles();
         }
-
-        // 2. Sync articles list (only store if server returned non-empty articles)
-        if (Array.isArray(data.articles) && data.articles.length > 0) {
-          safeStorage.setItem(STORAGE_KEY, JSON.stringify(data.articles));
-        }
-
-        window.dispatchEvent(new Event("sv_articles_change"));
-        return getAllArticles();
       }
     }
   } catch (e) {
@@ -1241,22 +1220,8 @@ export const saveArticleToStore = (articleData) => {
       addNotification(articleToSave);
     }
 
-    // Persist to Convex Real-time DB
-    convex.mutation(api.articles.save, {
-      customId: articleId,
-      title: articleToSave.title,
-      slug: articleToSave.slug,
-      category: articleToSave.category,
-      district: articleToSave.district,
-      subDistrict: articleToSave.subDistrict,
-      reporter: articleToSave.reporter,
-      author: articleToSave.author,
-      excerpt: articleToSave.excerpt,
-      content: articleToSave.content,
-      image: articleToSave.image,
-      date: articleToSave.date,
-      readTime: articleToSave.readTime,
-    }).catch(() => {});
+    // Persist to Firebase Firestore
+    saveArticleToFirestore(articleToSave).catch(() => {});
 
     // Persist to Express backend (fire-and-forget / async)
     fetch("/api/articles", {
@@ -1291,8 +1256,8 @@ export const deleteArticleFromStore = (id) => {
     window.dispatchEvent(new Event("sv_articles_change"));
     broadcastLocalEvent("articles_update", { deletedId: idStr, action: "delete" });
 
-    // Delete in Convex DB
-    convex.mutation(api.articles.remove, { id: idStr }).catch(() => {});
+    // Delete in Firebase Firestore
+    deleteArticleFromFirestore(idStr).catch(() => {});
 
     fetch(`/api/articles/${encodeURIComponent(id)}`, {
       method: "DELETE",
@@ -1311,24 +1276,26 @@ export const deleteArticleFromStore = (id) => {
 
 export const syncSubscribersFromServer = async () => {
   try {
-    // 1. Try Convex query
+    // 1. Try Firebase Firestore query
     try {
-      const convexSubs = await convex.query(api.subscribers.get);
-      if (Array.isArray(convexSubs) && convexSubs.length > 0) {
-        safeStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(convexSubs));
+      const firestoreSubs = await getSubscribersFromFirestore();
+      if (Array.isArray(firestoreSubs) && firestoreSubs.length > 0) {
+        safeStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(firestoreSubs));
         window.dispatchEvent(new Event("sv_subscribers_change"));
-        return convexSubs;
+        return firestoreSubs;
       }
     } catch {}
 
-    // 2. Fallback to API server
-    const res = await fetch("/api/subscribers");
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.subscribers)) {
-        safeStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(data.subscribers));
-        window.dispatchEvent(new Event("sv_subscribers_change"));
-        return data.subscribers;
+    // 2. Fallback to API server only if Firebase is not active
+    if (!isFirebaseConfigured()) {
+      const res = await fetch("/api/subscribers");
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.subscribers)) {
+          safeStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(data.subscribers));
+          window.dispatchEvent(new Event("sv_subscribers_change"));
+          return data.subscribers;
+        }
       }
     }
   } catch (e) {}
@@ -1376,11 +1343,8 @@ export const saveSubscriber = ({ email, phone }) => {
     safeStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("sv_subscribers_change"));
 
-    // Persist to Convex DB
-    convex.mutation(api.subscribers.subscribe, {
-      email: cleanEmail,
-      phone: cleanPhone,
-    }).catch(() => {});
+    // Persist to Firebase Firestore
+    saveSubscriberToFirestore(newSub).catch(() => {});
 
     // Async persist to server
     fetch("/api/subscribers", {
@@ -1405,8 +1369,8 @@ export const deleteSubscriber = (idOrPhone) => {
     safeStorage.setItem(SUBSCRIBERS_KEY, JSON.stringify(filtered));
     window.dispatchEvent(new Event("sv_subscribers_change"));
 
-    // Delete in Convex DB
-    convex.mutation(api.subscribers.remove, { id: String(idOrPhone) }).catch(() => {});
+    // Delete in Firebase Firestore
+    deleteSubscriberFromFirestore(String(idOrPhone)).catch(() => {});
 
     fetch(`/api/subscribers/${encodeURIComponent(idOrPhone)}`, {
       method: "DELETE",
