@@ -142,45 +142,62 @@ export default function ArticleDetail() {
   const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
     ? "https://swadeshvaani.com"
     : rawOrigin;
-  const shareUrl = article?.id ? `${publicOrigin}/news/${article.id}` : publicOrigin;
+
+  // Ensure articleId is ALWAYS present from route param `id` or article object
+  const activeArticleId = article?.id || article?.customId || id;
+  const shareUrl = activeArticleId
+    ? `${publicOrigin}/news/${encodeURIComponent(activeArticleId)}`
+    : publicOrigin;
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(shareUrl);
+    const currentId = article?.id || article?.customId || id;
+    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
+    navigator.clipboard.writeText(currentUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
   const handleShareWa = () => {
+    const currentId = article?.id || article?.customId || id;
+    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
     const headline = article?.title || "ताज़ा समाचार | स्वदेश वाणी";
     const excerpt = article?.excerpt ? `\n\n${article.excerpt}` : "";
-    const text = `${shareUrl}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews`;
+    const text = `${currentUrl}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleShareFb = () => {
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(article?.title || "")}`;
+    const currentId = article?.id || article?.customId || id;
+    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}&quote=${encodeURIComponent(article?.title || "")}`;
     window.open(fbUrl, "fbShare", "width=640,height=580,menubar=no,toolbar=no");
   };
 
   const handleShareLi = () => {
-    const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+    const currentId = article?.id || article?.customId || id;
+    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
+    const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(currentUrl)}`;
     window.open(liUrl, "liShare", "width=640,height=600,menubar=no,toolbar=no");
   };
 
   const handleShareTw = () => {
-    const twUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`🔴 ${article?.title}`)}&url=${encodeURIComponent(shareUrl)}&hashtags=SwadeshVaani,JharkhandNews`;
+    const currentId = article?.id || article?.customId || id;
+    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
+    const twUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`🔴 ${article?.title || "ताज़ा समाचार"}`)}&url=${encodeURIComponent(currentUrl)}&hashtags=SwadeshVaani,JharkhandNews`;
     window.open(twUrl, "twShare", "width=600,height=500,menubar=no,toolbar=no");
   };
 
   // Native mobile share sheet if supported
   const handleNativeShare = async () => {
+    const currentId = article?.id || article?.customId || id;
+    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${article?.title || "ताज़ा समाचार"} | स्वदेश वाणी`,
           text: `📰 *${article?.title || "ताज़ा समाचार"}*\n${article?.excerpt ? article.excerpt + "\n" : ""}`,
-          url: shareUrl,
+          url: currentUrl,
         });
         return;
       } catch (err) {
