@@ -114,7 +114,7 @@ export default function ArticleDetail() {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://swadeshvaani.com";
     const fullImageUrl = article.image
       ? (article.image.startsWith("http") ? article.image : `${origin}${article.image.startsWith("/") ? "" : "/"}${article.image}`)
-      : `${origin}/src/Component/photos/logo.jpeg`;
+      : `${origin}/logo.jpeg`;
     const fullUrl = `${origin}/news/${article.id}`;
 
     setMetaTag("property", "og:title", article.title);
@@ -137,8 +137,12 @@ export default function ArticleDetail() {
     .slice(0, 4);
 
   // Dynamic permanent URL for both local dev and production deployed domains
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const shareUrl = article?.id ? `${origin}/news/${article.id}` : (typeof window !== "undefined" ? window.location.href : "");
+  const rawOrigin = typeof window !== "undefined" ? window.location.origin : "https://swadeshvaani.com";
+  // WhatsApp and Facebook crawlers need public HTTPS URL to crawl and fetch preview card
+  const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
+    ? "https://swadeshvaani.com"
+    : rawOrigin;
+  const shareUrl = article?.id ? `${publicOrigin}/news/${article.id}` : publicOrigin;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -167,6 +171,25 @@ export default function ArticleDetail() {
   const handleShareTw = () => {
     const twUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`🔴 ${article?.title}`)}&url=${encodeURIComponent(shareUrl)}&hashtags=SwadeshVaani,JharkhandNews`;
     window.open(twUrl, "twShare", "width=600,height=500,menubar=no,toolbar=no");
+  };
+
+  // Native mobile share sheet if supported
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${article?.title || "ताज़ा समाचार"} | स्वदेश वाणी`,
+          text: `📰 *${article?.title || "ताज़ा समाचार"}*\n${article?.excerpt ? article.excerpt + "\n" : ""}`,
+          url: shareUrl,
+        });
+        return;
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.warn("Native share error:", err);
+        }
+      }
+    }
+    handleShareWa();
   };
 
   // Loading spinner while syncing from server

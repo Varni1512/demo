@@ -2657,7 +2657,11 @@ export default function Admin() {
                 <button
                   type="button"
                   onClick={() => {
-                    const articleUrl = `${window.location.origin}/news/${publishedModalArticle.id}`;
+                    const rawOrigin = typeof window !== "undefined" ? window.location.origin : "https://swadeshvaani.com";
+                    const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
+                      ? "https://swadeshvaani.com"
+                      : rawOrigin;
+                    const articleUrl = `${publicOrigin}/news/${publishedModalArticle.id}`;
                     navigator.clipboard.writeText(articleUrl);
                     showToast("लिंक कॉपी कर लिया गया!", "success");
                   }}
@@ -2670,10 +2674,14 @@ export default function Admin() {
                 <button
                   type="button"
                   onClick={() => {
-                    const articleUrl = `${window.location.origin}/news/${publishedModalArticle.id}`;
+                    const rawOrigin = typeof window !== "undefined" ? window.location.origin : "https://swadeshvaani.com";
+                    const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
+                      ? "https://swadeshvaani.com"
+                      : rawOrigin;
+                    const articleUrl = `${publicOrigin}/news/${publishedModalArticle.id}`;
                     const headline = publishedModalArticle.title || "ताज़ा समाचार";
                     const excerpt = publishedModalArticle.excerpt ? `\n\n${publishedModalArticle.excerpt}` : "";
-                    const text = `📰 *${headline}*${excerpt}\n\n👉 *पूरी खबर यहां पढ़ें:*\n${articleUrl}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews #BreakingNews`;
+                    const text = `${articleUrl}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews #BreakingNews`;
                     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
                   }}
                   className="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
@@ -2685,7 +2693,11 @@ export default function Admin() {
                 <button
                   type="button"
                   onClick={() => {
-                    const articleUrl = `${window.location.origin}/news/${publishedModalArticle.id}`;
+                    const rawOrigin = typeof window !== "undefined" ? window.location.origin : "https://swadeshvaani.com";
+                    const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
+                      ? "https://swadeshvaani.com"
+                      : rawOrigin;
+                    const articleUrl = `${publicOrigin}/news/${publishedModalArticle.id}`;
                     const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(articleUrl)}`;
                     window.open(fbUrl, "fbShare", "width=640,height=580,menubar=no,toolbar=no");
                   }}

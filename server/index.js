@@ -431,6 +431,37 @@ function writeJsonFile(filePath, data) {
   }
 }
 
+const articleCache = new Map();
+
+function fromFirestoreValue(val) {
+  if (!val) return null;
+  if ("stringValue" in val) return val.stringValue;
+  if ("integerValue" in val) return Number(val.integerValue);
+  if ("doubleValue" in val) return Number(val.doubleValue);
+  if ("booleanValue" in val) return Boolean(val.booleanValue);
+  if ("nullValue" in val) return null;
+  if ("arrayValue" in val) return (val.arrayValue.values || []).map(fromFirestoreValue);
+  if ("mapValue" in val) {
+    const res = {};
+    for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
+      res[k] = fromFirestoreValue(v);
+    }
+    return res;
+  }
+  return null;
+}
+
+function fromFirestoreDoc(doc) {
+  if (!doc || !doc.fields) return null;
+  const data = {};
+  for (const [k, v] of Object.entries(doc.fields)) {
+    data[k] = fromFirestoreValue(v);
+  }
+  const idFromPath = doc.name ? doc.name.split("/").pop() : "";
+  const finalId = data.customId || data.id || idFromPath;
+  return { id: finalId, ...data };
+}
+
 function getStoredArticles() {
   return readJsonFile(ARTICLES_FILE, []);
 }
@@ -446,6 +477,153 @@ function getDeletedArticleIds() {
 function saveDeletedArticleIds(ids) {
   const uniqueIds = Array.from(new Set(ids.map(String)));
   return writeJsonFile(DELETED_ARTICLES_FILE, uniqueIds);
+}
+
+// Background sync from Firestore to local articles.json on server start if local store is empty
+async function syncArticlesFromFirestoreIfEmpty() {
+  try {
+    const local = getStoredArticles();
+    if (local && local.length > 0) {
+      console.log(`📦 Loaded ${local.length} articles from local articles.json into cache`);
+      for (const a of local) {
+        if (a && a.id) articleCache.set(String(a.id).toLowerCase(), a);
+        if (a && a.slug) articleCache.set(String(a.slug).toLowerCase(), a);
+      }
+      return;
+    }
+
+    const apiKey = (process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || "").trim();
+    const projectId = (process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "").trim();
+    if (!apiKey || !projectId) {
+      console.warn("⚠️ Firebase credentials missing in environment. Cannot sync articles.");
+      return;
+    }
+
+    console.log("🔄 Fetching news articles from Firebase Firestore for server cache...");
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/articles?key=${apiKey}&pageSize=300`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn("⚠️ Firestore fetch failed with status:", res.status);
+      return;
+    }
+    const json = await res.json();
+    const articles = (json.documents || []).map(fromFirestoreDoc).filter((a) => a && a.title);
+    if (articles.length > 0) {
+      saveStoredArticles(articles);
+      for (const a of articles) {
+        if (a.id) articleCache.set(String(a.id).toLowerCase(), a);
+        if (a.slug) articleCache.set(String(a.slug).toLowerCase(), a);
+      }
+      console.log(`✅ Successfully synced ${articles.length} articles from Firestore to server cache!`);
+    }
+  } catch (err) {
+    console.warn("⚠️ Error syncing articles from Firestore:", err.message);
+  }
+}
+
+// Find an article by ID, customId, or slug with fallback to Firestore REST API
+async function findArticle(searchKey) {
+  if (!searchKey) return null;
+  const cleanKey = decodeURIComponent(String(searchKey)).trim().toLowerCase();
+
+  // 1. Check in-memory cache
+  if (articleCache.has(cleanKey)) {
+    return articleCache.get(cleanKey);
+  }
+
+  // 2. Check local articles.json
+  const deletedIds = getDeletedArticleIds();
+  if (deletedIds.some((d) => d.toLowerCase() === cleanKey)) {
+    return null;
+  }
+
+  const articles = getStoredArticles();
+  let found = articles.find(
+    (a) =>
+      String(a.id || "").toLowerCase() === cleanKey ||
+      (a.slug && a.slug.toLowerCase() === cleanKey) ||
+      (a.customId && a.customId.toLowerCase() === cleanKey)
+  );
+  if (found && found.title) {
+    articleCache.set(cleanKey, found);
+    return found;
+  }
+
+  // 3. Fallback: Query Firebase Firestore REST API directly
+  const apiKey = (process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || "").trim();
+  const projectId = (process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "").trim();
+
+  if (apiKey && projectId) {
+    try {
+      // 3a. Direct doc lookup by docId
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/articles/${encodeURIComponent(searchKey)}?key=${apiKey}`;
+      const docRes = await fetch(docUrl);
+      if (docRes.ok) {
+        const docJson = await docRes.json();
+        const art = fromFirestoreDoc(docJson);
+        if (art && art.title) {
+          articleCache.set(cleanKey, art);
+          if (art.id) articleCache.set(String(art.id).toLowerCase(), art);
+          if (art.slug) articleCache.set(String(art.slug).toLowerCase(), art);
+          // Persist to local json
+          const current = getStoredArticles();
+          if (!current.some((c) => String(c.id) === String(art.id))) {
+            saveStoredArticles([art, ...current]);
+          }
+          return art;
+        }
+      }
+
+      // 3b. Structured query by customId, slug, or id
+      const queryUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery?key=${apiKey}`;
+      const runQuery = async (fieldName, val) => {
+        const body = {
+          structuredQuery: {
+            from: [{ collectionId: "articles" }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: fieldName },
+                op: "EQUAL",
+                value: { stringValue: val }
+              }
+            },
+            limit: 1
+          }
+        };
+        const qRes = await fetch(queryUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (qRes.ok) {
+          const qData = await qRes.json();
+          if (Array.isArray(qData) && qData[0]?.document) {
+            return fromFirestoreDoc(qData[0].document);
+          }
+        }
+        return null;
+      };
+
+      let queried = await runQuery("customId", searchKey);
+      if (!queried) queried = await runQuery("slug", searchKey);
+      if (!queried) queried = await runQuery("id", searchKey);
+
+      if (queried && queried.title) {
+        articleCache.set(cleanKey, queried);
+        if (queried.id) articleCache.set(String(queried.id).toLowerCase(), queried);
+        if (queried.slug) articleCache.set(String(queried.slug).toLowerCase(), queried);
+        const current = getStoredArticles();
+        if (!current.some((c) => String(c.id) === String(queried.id))) {
+          saveStoredArticles([queried, ...current]);
+        }
+        return queried;
+      }
+    } catch (err) {
+      console.warn("[findArticle] Firestore REST lookup error:", err.message);
+    }
+  }
+
+  return null;
 }
 
 // GET /api/articles - Retrieve all articles (with deletedIds)
@@ -481,16 +659,7 @@ app.get("/api/articles/:id", async (req, res) => {
     return res.status(404).json({ success: false, error: "Article has been deleted" });
   }
 
-  let article = null;
-
-  if (!article) {
-    const articles = getStoredArticles();
-    article = articles.find(
-      (a) =>
-        String(a.id).toLowerCase() === searchKey ||
-        (a.slug && a.slug.toLowerCase() === searchKey)
-    );
-  }
+  const article = await findArticle(id);
 
   if (article) {
     return res.json({ success: true, article });
@@ -1340,63 +1509,68 @@ if (staticDistPath) {
   async function renderArticlePageHtml(indexHtmlPath, req, res, articleId) {
     try {
       const rawHtml = fs.readFileSync(indexHtmlPath, "utf-8");
-      const searchKey = decodeURIComponent(String(articleId || "")).trim().toLowerCase();
+      const searchKey = decodeURIComponent(String(articleId || "")).trim();
       
-      // Fetch article from stored articles
-      let article = null;
-
-      // Fallback to local JSON if Convex fails
-      if (!article) {
-        const articles = getStoredArticles();
-        const deletedIds = getDeletedArticleIds();
-
-        if (deletedIds.some((d) => d.toLowerCase() === searchKey)) {
-          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-          return res.sendFile(indexHtmlPath);
-        }
-
-        article = articles.find(
-          (a) =>
-            String(a.id).toLowerCase() === searchKey ||
-            (a.slug && a.slug.toLowerCase() === searchKey)
-        );
-      }
+      const article = await findArticle(searchKey);
 
       if (!article) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         return res.sendFile(indexHtmlPath);
       }
 
+      // Determine Host and Protocol (Force https for public domains)
       const host = req.get("host") || "swadeshvaani.com";
-      const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+      let protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+      if (host.includes("swadeshvaani.com")) {
+        protocol = "https";
+      }
       const baseUrl = `${protocol}://${host}`;
 
+      // Resolve full absolute HTTPS image URL for WhatsApp & Facebook crawlers
       let fullImageUrl = "";
       if (article.image) {
-        let cleanImg = article.image;
-        if (typeof cleanImg === "string" && cleanImg.startsWith("data:image/")) {
+        let cleanImg = String(article.image).trim();
+        if (cleanImg.startsWith("data:image/")) {
           cleanImg = saveBase64Image(cleanImg, `art-${article.id}`);
           article.image = cleanImg;
         }
         if (cleanImg.startsWith("http://") || cleanImg.startsWith("https://")) {
-          fullImageUrl = cleanImg;
+          fullImageUrl = cleanImg.replace(/^http:\/\//i, "https://");
         } else {
           const cleanPath = cleanImg.startsWith("/") ? cleanImg : `/${cleanImg}`;
-          fullImageUrl = `${baseUrl}${cleanPath}`;
+          const imgBase = host.includes("localhost") ? "https://swadeshvaani.com" : baseUrl;
+          fullImageUrl = `${imgBase}${cleanPath}`;
         }
       } else {
-        fullImageUrl = `${baseUrl}/logo.jpeg`;
+        const imgBase = host.includes("localhost") ? "https://swadeshvaani.com" : baseUrl;
+        fullImageUrl = `${imgBase}/logo.jpeg`;
       }
 
-      const fullArticleUrl = `${baseUrl}/news/${encodeURIComponent(article.id)}`;
+      // Detect MIME type
+      let imageMime = "image/jpeg";
+      if (fullImageUrl.toLowerCase().endsWith(".png")) imageMime = "image/png";
+      else if (fullImageUrl.toLowerCase().endsWith(".webp")) imageMime = "image/webp";
+      else if (fullImageUrl.toLowerCase().endsWith(".gif")) imageMime = "image/gif";
+
+      const fullArticleUrl = `${baseUrl}/news/${encodeURIComponent(article.id || searchKey)}`;
+
+      // Sanitize title and description
       const safeTitle = (article.title || "स्वदेश वाणी | Swadesh Vani")
+        .replace(/[\r\n]+/g, " ")
         .replace(/"/g, "&quot;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-      const safeDescription = (article.excerpt || article.title || "स्वदेश वाणी — सत्य, निष्पक्ष और सटीक पत्रकारिता")
+        .replace(/>/g, "&gt;")
+        .trim();
+
+      const rawDesc = article.excerpt || article.content || article.title || "स्वदेश वाणी — सत्य, निष्पक्ष और सटीक पत्रकारिता";
+      const strippedDesc = String(rawDesc)
+        .replace(/<[^>]*>/g, "")
+        .replace(/[\r\n]+/g, " ")
         .replace(/"/g, "&quot;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+        .replace(/>/g, "&gt;")
+        .trim();
+      const safeDescription = strippedDesc.length > 200 ? `${strippedDesc.substring(0, 197)}...` : strippedDesc;
 
       const dynamicMetaTags = `
     <!-- Dynamic Social Share, Facebook & WhatsApp OpenGraph Tags -->
@@ -1404,7 +1578,7 @@ if (staticDistPath) {
     <meta name="description" content="${safeDescription}" />
     <link rel="canonical" href="${fullArticleUrl}" />
 
-    <!-- Open Graph (Facebook / WhatsApp / LinkedIn) -->
+    <!-- Open Graph (Facebook / WhatsApp / LinkedIn / Telegram) -->
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="स्वदेश वाणी (Swadesh Vaani)" />
     <meta property="og:title" content="${safeTitle}" />
@@ -1412,7 +1586,7 @@ if (staticDistPath) {
     <meta property="og:url" content="${fullArticleUrl}" />
     <meta property="og:image" content="${fullImageUrl}" />
     <meta property="og:image:secure_url" content="${fullImageUrl}" />
-    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:type" content="${imageMime}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${safeTitle}" />
@@ -1425,23 +1599,30 @@ if (staticDistPath) {
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@swadeshvaani" />
     <meta name="twitter:title" content="${safeTitle}" />
     <meta name="twitter:description" content="${safeDescription}" />
     <meta name="twitter:image" content="${fullImageUrl}" />
+    <meta name="twitter:image:alt" content="${safeTitle}" />
     <meta name="twitter:url" content="${fullArticleUrl}" />
+
+    <!-- WhatsApp & Legacy Fallback Image Link -->
     <link rel="image_src" href="${fullImageUrl}" />`;
 
       let injectedHtml = rawHtml;
-      if (injectedHtml.includes("</head>")) {
-        // Strip ALL static title, description, OpenGraph, article, and Twitter tags before injecting dynamic tags
-        injectedHtml = injectedHtml
-          .replace(/<title>[\s\S]*?<\/title>/gi, "")
-          .replace(/<meta\s+name=["']description["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+property=["']og:[^"']+["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+property=["']article:[^"']+["'][\s\S]*?>/gi, "")
-          .replace(/<meta\s+name=["']twitter:[^"']+["'][\s\S]*?>/gi, "")
-          .replace(/<link\s+rel=["'](canonical|image_src)["'][\s\S]*?>/gi, "")
-          .replace("</head>", `${dynamicMetaTags}\n  </head>`);
+      // Strip ALL static title, description, OpenGraph, article, and Twitter tags before injecting dynamic tags
+      injectedHtml = injectedHtml
+        .replace(/<title>[\s\S]*?<\/title>/gi, "")
+        .replace(/<meta\s+name=["']description["'][\s\S]*?>/gi, "")
+        .replace(/<meta\s+property=["']og:[^"']+["'][\s\S]*?>/gi, "")
+        .replace(/<meta\s+property=["']article:[^"']+["'][\s\S]*?>/gi, "")
+        .replace(/<meta\s+name=["']twitter:[^"']+["'][\s\S]*?>/gi, "")
+        .replace(/<link\s+rel=["'](canonical|image_src)["'][\s\S]*?>/gi, "");
+
+      if (injectedHtml.includes("<head>")) {
+        injectedHtml = injectedHtml.replace("<head>", `<head>\n${dynamicMetaTags}`);
+      } else if (injectedHtml.includes("</head>")) {
+        injectedHtml = injectedHtml.replace("</head>", `${dynamicMetaTags}\n  </head>`);
       }
 
       // Inject environment variables from server process.env into HTML for browser
@@ -1564,6 +1745,10 @@ if (staticDistPath) {
 // Start Express Server
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Savdeshvani Server running on port ${PORT}`);
+  // Proactively sync Firestore articles into server cache on boot
+  syncArticlesFromFirestoreIfEmpty().catch((e) => {
+    console.warn("Initial Firestore articles sync notice:", e.message);
+  });
 });
 
 server.on("error", (err) => {
