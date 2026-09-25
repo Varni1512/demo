@@ -1223,6 +1223,7 @@ export const saveArticleToStore = async (articleData) => {
       reporter: articleData.reporter || articleData.author || "स्वदेश वाणी ब्यूरो",
       author: articleData.reporter || articleData.author || "स्वदेश वाणी ब्यूरो",
       status: articleData.status || "Published",
+      createdAt: articleData.createdAt || Date.now(),
       date:
         articleData.date ||
         new Date().toLocaleDateString("en-GB", {

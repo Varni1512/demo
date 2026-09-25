@@ -23,11 +23,14 @@ import {
 import { getArticleById, getAllArticles, syncArticlesFromServer, resolveArticleImage, getCategoryFallbackImage } from "../data/newsData";
 import { getArticleByIdFromFirestore } from "../utils/firebase";
 import { safeStorage } from "../utils/safeStorage";
+import { useLanguage } from "../context/LanguageContext";
+import { formatTimeAgo } from "../utils/timeAgo";
 import SubscribeSection from "./SubscribeSection";
 
 export default function ArticleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { language = "hi" } = useLanguage?.() || {};
   const [copied, setCopied] = useState(false);
   const [article, setArticle] = useState(() => getArticleById(id));
   const [loading, setLoading] = useState(!article);
@@ -331,12 +334,13 @@ export default function ArticleDetail() {
                 )}
               </div>
 
-              {/* <div className="flex items-center gap-4 text-xs font-medium text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-slate-400" />
-                  {article.readTime || "3 मिनट"}
-                </span>
-              </div> */}
+              {/* Time Ago (Relative Time: e.g. 1 min before, 1 hour before, 1 day before) */}
+              {article && (
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 border border-slate-200/80 shadow-xs">
+                  <Clock className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
+                  <span>{formatTimeAgo(article, language)}</span>
+                </div>
+              )}
             </div>
 
             {/* Main Headline */}

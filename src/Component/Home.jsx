@@ -405,7 +405,7 @@ const Home = () => {
 
   const mainNews = newsData[0] || null;
   const latestNews = newsData.slice(1, 6);
-  const topHeadlines = newsData.slice(6, 12);
+  const topHeadlines = newsData.slice(6, 18);
 
   return (
     <div className="min-h-screen bg-slate-50">

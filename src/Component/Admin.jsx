@@ -424,6 +424,7 @@ export default function Admin() {
       ...formData,
       id: isEdit ? editingArticleId : `art-${Date.now()}`,
       slug: generateSlug(formData.title),
+      createdAt: isEdit ? (formData.createdAt || Date.now()) : (formData.createdAt || Date.now()),
       date: new Date().toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "short",
