@@ -991,41 +991,95 @@ export const clearNotifications = () => {
 };
 
 // Sync articles and deletions from backend server across all user devices
+export const syncLocalArticlesToServer = async () => {
+  try {
+    const rawLocal = safeStorage.getItem(STORAGE_KEY);
+    if (!rawLocal) return;
+    const localArticles = JSON.parse(rawLocal);
+    if (!Array.isArray(localArticles) || localArticles.length === 0) return;
+
+    // Fetch server list
+    const res = await fetch("/api/articles");
+    if (!res.ok) return;
+    const serverData = await res.json();
+    const serverArticles = Array.isArray(serverData) ? serverData : (serverData?.articles || []);
+    const serverIdSet = new Set(serverArticles.map((a) => String(a.id)));
+
+    // Find any local articles that are missing on the server
+    const missingOnServer = localArticles.filter((a) => a && a.id && a.title && !serverIdSet.has(String(a.id)));
+
+    if (missingOnServer.length > 0) {
+      console.log(`🔄 Syncing ${missingOnServer.length} local article(s) to server...`);
+      await fetch("/api/articles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(missingOnServer),
+      }).catch(() => {});
+
+      // If running on localhost, also push to production swadeshvaani.com
+      if (typeof window !== "undefined" && (window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1"))) {
+        fetch("https://swadeshvaani.com/api/articles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(missingOnServer),
+          mode: "cors",
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    // Non-blocking sync error
+  }
+};
+
 export const syncArticlesFromServer = async () => {
   try {
-    // 1. Try Firebase Firestore query first (fast & reliable)
+    // 1. Try Firebase Firestore query first if active
+    let firestoreSuccess = false;
     try {
       const firestoreArticles = await getArticlesFromFirestore();
       if (Array.isArray(firestoreArticles) && firestoreArticles.length > 0) {
         safeStorage.setItem(STORAGE_KEY, JSON.stringify(firestoreArticles));
         window.dispatchEvent(new Event("sv_articles_change"));
+        firestoreSuccess = true;
+        // Background sync any local articles to Express server as well
+        syncLocalArticlesToServer().catch(() => {});
         return getAllArticles();
       }
-    } catch {}
+    } catch {
+      firestoreSuccess = false;
+    }
 
-    // 2. Fallback to API server only if Firebase is not active
-    if (!isFirebaseConfigured()) {
-      const res = await fetch("/api/articles");
-      if (res.ok) {
-        const data = await res.json();
-        if (data) {
-          // 1. Sync deleted article IDs across devices so deleted news never reappears
-          if (Array.isArray(data.deletedIds)) {
-            const currentDeleted = new Set(
-              JSON.parse(safeStorage.getItem(DELETED_ARTICLES_KEY) || "[]").map(String)
-            );
-            data.deletedIds.forEach((id) => currentDeleted.add(String(id)));
-            safeStorage.setItem(DELETED_ARTICLES_KEY, JSON.stringify([...currentDeleted]));
-          }
-
-          // 2. Sync articles list (only store if server returned non-empty articles)
-          if (Array.isArray(data.articles) && data.articles.length > 0) {
-            safeStorage.setItem(STORAGE_KEY, JSON.stringify(data.articles));
-          }
-
-          window.dispatchEvent(new Event("sv_articles_change"));
-          return getAllArticles();
+    // 2. ALWAYS query Express API server if Firestore fails, is exhausted (429), or returned empty
+    const res = await fetch("/api/articles");
+    if (res.ok) {
+      const data = await res.json();
+      if (data) {
+        // 1. Sync deleted article IDs across devices so deleted news never reappears
+        if (Array.isArray(data.deletedIds)) {
+          const currentDeleted = new Set(
+            JSON.parse(safeStorage.getItem(DELETED_ARTICLES_KEY) || "[]").map(String)
+          );
+          data.deletedIds.forEach((id) => currentDeleted.add(String(id)));
+          safeStorage.setItem(DELETED_ARTICLES_KEY, JSON.stringify([...currentDeleted]));
         }
+
+        // 2. Sync articles list (merge server articles with local store safely)
+        if (Array.isArray(data.articles) && data.articles.length > 0) {
+          const localSaved = JSON.parse(safeStorage.getItem(STORAGE_KEY) || "[]");
+          const serverIdSet = new Set(data.articles.map((a) => String(a.id)));
+          // Preserve local articles that aren't on server yet
+          const localOnly = localSaved.filter((a) => a && a.id && !serverIdSet.has(String(a.id)));
+          const merged = [...localOnly, ...data.articles];
+          safeStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+
+          // If there were local-only articles, push them to the server so WhatsApp/Facebook crawlers can see them!
+          if (localOnly.length > 0) {
+            syncLocalArticlesToServer().catch(() => {});
+          }
+        }
+
+        window.dispatchEvent(new Event("sv_articles_change"));
+        return getAllArticles();
       }
     }
   } catch (e) {
@@ -1150,7 +1204,7 @@ export const getArticlesByCategory = (categoryQuery) => {
 };
 
 // Save a new or updated article (used when Admin publishes or edits)
-export const saveArticleToStore = (articleData) => {
+export const saveArticleToStore = async (articleData) => {
   try {
     const saved = safeStorage.getItem(STORAGE_KEY);
     let customArticles = saved ? JSON.parse(saved) : [];
@@ -1220,15 +1274,29 @@ export const saveArticleToStore = (articleData) => {
       addNotification(articleToSave);
     }
 
-    // Persist to Firebase Firestore
+    // Persist to Firebase Firestore (best-effort)
     saveArticleToFirestore(articleToSave).catch(() => {});
 
-    // Persist to Express backend (fire-and-forget / async)
-    fetch("/api/articles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(articleToSave),
-    }).catch(() => {});
+    // Persist to Express backend (AWAITED to guarantee server has it before social sharing happens!)
+    try {
+      await fetch("/api/articles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(articleToSave),
+      });
+    } catch (apiErr) {
+      console.warn("Local /api/articles post notice:", apiErr.message);
+    }
+
+    // If running on localhost / dev, also push to production swadeshvaani.com
+    if (typeof window !== "undefined" && (window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1"))) {
+      fetch("https://swadeshvaani.com/api/articles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(articleToSave),
+        mode: "cors",
+      }).catch(() => {});
+    }
 
     return { articles: customArticles, savedArticle: articleToSave, isNew };
   } catch (e) {

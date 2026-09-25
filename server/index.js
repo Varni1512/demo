@@ -524,7 +524,11 @@ async function syncArticlesFromFirestoreIfEmpty() {
 // Find an article by ID, customId, or slug with fallback to Firestore REST API
 async function findArticle(searchKey) {
   if (!searchKey) return null;
-  const cleanKey = decodeURIComponent(String(searchKey)).trim().toLowerCase();
+  let rawKey = decodeURIComponent(String(searchKey)).trim();
+  if (rawKey.includes("?")) rawKey = rawKey.split("?")[0].trim();
+  if (rawKey.includes("#")) rawKey = rawKey.split("#")[0].trim();
+  if (rawKey.endsWith("/")) rawKey = rawKey.slice(0, -1).trim();
+  const cleanKey = rawKey.toLowerCase();
 
   // 1. Check in-memory cache
   if (articleCache.has(cleanKey)) {
@@ -541,13 +545,36 @@ async function findArticle(searchKey) {
   let found = articles.find(
     (a) =>
       String(a.id || "").toLowerCase() === cleanKey ||
-      (a.slug && a.slug.toLowerCase() === cleanKey) ||
-      (a.customId && a.customId.toLowerCase() === cleanKey)
+      (a.slug && String(a.slug).toLowerCase() === cleanKey) ||
+      (a.customId && String(a.customId).toLowerCase() === cleanKey) ||
+      (a.title && a.title.toLowerCase().trim() === cleanKey) ||
+      (a.title && cleanKey.length > 5 && (a.title.toLowerCase().includes(cleanKey) || cleanKey.includes(a.title.toLowerCase().trim())))
   );
   if (found && found.title) {
     articleCache.set(cleanKey, found);
     return found;
   }
+
+  // 2b. Check convex backup articles if not in articles.json
+  try {
+    const backupPath = path.join(__dirname, "..", "convex-data-backup", "articles", "documents.jsonl");
+    if (fs.existsSync(backupPath)) {
+      const content = fs.readFileSync(backupPath, "utf-8");
+      const lines = content.split("\n").filter((l) => l.trim().length > 0);
+      for (const line of lines) {
+        try {
+          const bArt = JSON.parse(line);
+          const bId = String(bArt.id || bArt.customId || "").toLowerCase();
+          const bSlug = String(bArt.slug || "").toLowerCase();
+          const bTitle = String(bArt.title || "").toLowerCase();
+          if (bId === cleanKey || bSlug === cleanKey || bTitle === cleanKey || (cleanKey.length > 5 && bTitle.includes(cleanKey))) {
+            articleCache.set(cleanKey, bArt);
+            return bArt;
+          }
+        } catch {}
+      }
+    }
+  } catch {}
 
   // 3. Fallback: Query Firebase Firestore REST API directly
   const apiKey = (process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY || "").trim();
@@ -619,7 +646,7 @@ async function findArticle(searchKey) {
         return queried;
       }
     } catch (err) {
-      console.warn("[findArticle] Firestore REST lookup error:", err.message);
+      console.warn("[findArticle] Firestore REST lookup notice:", err.message);
     }
   }
 
@@ -667,47 +694,61 @@ app.get("/api/articles/:id", async (req, res) => {
   return res.status(404).json({ success: false, error: "Article not found" });
 });
 
-// POST /api/articles - Save or update article
+// POST /api/articles - Save or update article (supports single article or bulk array)
 app.post("/api/articles", (req, res) => {
   try {
-    const article = req.body;
-    if (!article || !article.title) {
+    const payload = req.body;
+    if (!payload) {
+      return res.status(400).json({ success: false, error: "No payload provided." });
+    }
+
+    const incomingList = Array.isArray(payload) ? payload : [payload];
+    if (incomingList.length === 0 || !incomingList[0]?.title) {
       return res.status(400).json({ success: false, error: "Article title is required." });
     }
 
-    const articles = getStoredArticles();
-    const articleId = String(article.id || `art-${Date.now()}`);
-
-    let processedImage = article.image;
-    if (processedImage && typeof processedImage === "string" && processedImage.startsWith("data:image/")) {
-      processedImage = saveBase64Image(processedImage, `art-${articleId}`);
-    }
-
-    const articleToSave = {
-      ...article,
-      id: articleId,
-      image: processedImage || article.image,
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Un-delete if this ID was previously marked deleted
+    let articles = getStoredArticles();
     const deletedIds = getDeletedArticleIds();
-    if (deletedIds.includes(articleId)) {
-      saveDeletedArticleIds(deletedIds.filter((d) => d !== articleId));
+    let updatedCount = 0;
+    let lastSaved = null;
+
+    for (const article of incomingList) {
+      if (!article || !article.title) continue;
+      const articleId = String(article.id || `art-${Date.now()}`);
+
+      // Skip deleted
+      if (deletedIds.includes(articleId)) continue;
+
+      let processedImage = article.image;
+      if (processedImage && typeof processedImage === "string" && processedImage.startsWith("data:image/")) {
+        processedImage = saveBase64Image(processedImage, `art-${articleId}`);
+      }
+
+      const articleToSave = {
+        ...article,
+        id: articleId,
+        image: processedImage || article.image,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Add to in-memory cache
+      articleCache.set(articleId.toLowerCase(), articleToSave);
+      if (articleToSave.slug) articleCache.set(String(articleToSave.slug).toLowerCase(), articleToSave);
+      if (articleToSave.customId) articleCache.set(String(articleToSave.customId).toLowerCase(), articleToSave);
+
+      const index = articles.findIndex((a) => String(a.id) === String(articleId));
+      if (index >= 0) {
+        articles[index] = articleToSave;
+      } else {
+        articles = [articleToSave, ...articles];
+      }
+      lastSaved = articleToSave;
+      updatedCount++;
     }
 
-    const index = articles.findIndex((a) => String(a.id) === String(articleId));
-    let updated;
-    if (index >= 0) {
-      updated = [...articles];
-      updated[index] = articleToSave;
-    } else {
-      updated = [articleToSave, ...articles];
-    }
-
-    saveStoredArticles(updated);
-    broadcastRealtimeEvent("articles_update", { article: articleToSave, action: index >= 0 ? "update" : "create" });
-    return res.json({ success: true, article: articleToSave, articles: updated, deletedIds: getDeletedArticleIds() });
+    saveStoredArticles(articles);
+    broadcastRealtimeEvent("articles_update", { article: lastSaved, count: updatedCount, action: "save" });
+    return res.json({ success: true, article: lastSaved, articles, count: updatedCount, deletedIds: getDeletedArticleIds() });
   } catch (err) {
     console.error("Error saving article on server:", err);
     return res.status(500).json({ success: false, error: err.message });
@@ -1511,7 +1552,32 @@ if (staticDistPath) {
       const rawHtml = fs.readFileSync(indexHtmlPath, "utf-8");
       const searchKey = decodeURIComponent(String(articleId || "")).trim();
       
-      const article = await findArticle(searchKey);
+      let article = await findArticle(searchKey);
+
+      // Resilient fallback: If article not yet in DB/cache, check query params (?t=...&img=...)
+      if (!article) {
+        const qTitle = req.query.t || req.query.title || "";
+        const qImg = req.query.img || req.query.image || "";
+        const qDesc = req.query.d || req.query.desc || req.query.excerpt || "";
+        if (qTitle || qImg) {
+          article = {
+            id: searchKey || `art-${Date.now()}`,
+            title: qTitle || "स्वदेश वाणी | Swadesh Vani",
+            image: qImg || "",
+            excerpt: qDesc || "स्वदेश वाणी — सत्य, निष्पक्ष और सटीक पत्रकारिता",
+            date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+            category: req.query.cat || "झारखंड",
+            reporter: req.query.author || "स्वदेश वाणी ब्यूरो",
+          };
+          try {
+            articleCache.set(String(article.id).toLowerCase(), article);
+            const current = getStoredArticles();
+            if (!current.some((c) => String(c.id) === String(article.id))) {
+              saveStoredArticles([article, ...current]);
+            }
+          } catch {}
+        }
+      }
 
       if (!article) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -1551,6 +1617,15 @@ if (staticDistPath) {
       if (fullImageUrl.toLowerCase().endsWith(".png")) imageMime = "image/png";
       else if (fullImageUrl.toLowerCase().endsWith(".webp")) imageMime = "image/webp";
       else if (fullImageUrl.toLowerCase().endsWith(".gif")) imageMime = "image/gif";
+
+      // Cloudinary Image Optimization for Social Cards (WhatsApp, Facebook, Twitter, LinkedIn):
+      // Forces JPEG format, 1200x630 dimensions (1.91:1 ratio), < 100KB file size, subject auto-focus
+      if (fullImageUrl.includes("res.cloudinary.com") && fullImageUrl.includes("/upload/")) {
+        if (!fullImageUrl.includes("/upload/f_jpg")) {
+          fullImageUrl = fullImageUrl.replace("/upload/", "/upload/f_jpg,q_auto:good,w_1200,h_630,c_fill,g_auto/");
+        }
+        imageMime = "image/jpeg";
+      }
 
       const fullArticleUrl = `${baseUrl}/news/${encodeURIComponent(article.id || searchKey)}`;
 

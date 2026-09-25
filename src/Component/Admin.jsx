@@ -237,6 +237,8 @@ export default function Admin() {
   };
 
   // Sync articles list
+  const [isSubmittingArticle, setIsSubmittingArticle] = useState(false);
+
   const refreshArticles = () => {
     setNewsList(getAllArticles());
     setNotificationsList(getNotifications());
@@ -402,7 +404,7 @@ export default function Admin() {
   };
 
   // Submit Article (Save or Edit)
-  const handleSubmitArticle = (e) => {
+  const handleSubmitArticle = async (e) => {
     e.preventDefault();
 
     if (!formData.title.trim()) {
@@ -414,6 +416,8 @@ export default function Admin() {
       showToast("कृपया समाचार का विवरण (Content/Excerpt) दर्ज करें।", "error");
       return;
     }
+
+    setIsSubmittingArticle(true);
 
     const isEdit = !!editingArticleId;
     const articlePayload = {
@@ -427,23 +431,30 @@ export default function Admin() {
       }),
     };
 
-    const res = saveArticleToStore(articlePayload);
-    refreshArticles();
+    try {
+      const res = await saveArticleToStore(articlePayload);
+      refreshArticles();
 
-    const saved = res.savedArticle || articlePayload;
+      const saved = res?.savedArticle || articlePayload;
 
-    if (isEdit) {
-      showToast("समाचार सफलतापूर्वक अपडेट किया गया!", "success");
-    } else {
-      showToast("समाचार प्रकाशित हुआ एवं पाठकों को सूचना (Notification) भेज दी गई!", "success");
-      setPublishedModalArticle(saved);
-    }
+      if (isEdit) {
+        showToast("समाचार सफलतापूर्वक अपडेट किया गया!", "success");
+      } else {
+        showToast("समाचार प्रकाशित हुआ एवं सोशल शेयरिंग के लिए तैयार है!", "success");
+        setPublishedModalArticle(saved);
+      }
 
-    setFormData(initialFormState);
-    setIsCustomCitySelected(false);
-    setEditingArticleId(null);
-    if (isEdit) {
-      setActivePage("news");
+      setFormData(initialFormState);
+      setIsCustomCitySelected(false);
+      setEditingArticleId(null);
+      if (isEdit) {
+        setActivePage("news");
+      }
+    } catch (err) {
+      console.error("Error submitting article:", err);
+      showToast("समाचार प्रकाशित करने में समस्या आई, कृपया पुनः प्रयास करें।", "error");
+    } finally {
+      setIsSubmittingArticle(false);
     }
   };
 
@@ -1728,14 +1739,24 @@ export default function Admin() {
 
                     <button
                       type="submit"
-                      className="px-7 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-lg shadow-orange-600/30 transition flex items-center gap-2 cursor-pointer"
+                      disabled={isSubmittingArticle}
+                      className="px-7 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-bold text-xs shadow-lg shadow-orange-600/30 transition flex items-center gap-2 cursor-pointer"
                     >
-                      <FaCheckCircle />
-                      <span>
-                        {editingArticleId
-                          ? (language === "hi" ? "समाचार अपडेट करें" : "Save Changes")
-                          : (language === "hi" ? "प्रकाशित करें एवं सूचना भेजें" : "Publish & Notify")}
-                      </span>
+                      {isSubmittingArticle ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>{language === "hi" ? "प्रकाशित हो रहा है..." : "Publishing..."}</span>
+                        </>
+                      ) : (
+                        <>
+                          <FaCheckCircle />
+                          <span>
+                            {editingArticleId
+                              ? (language === "hi" ? "समाचार अपडेट करें" : "Save Changes")
+                              : (language === "hi" ? "प्रकाशित करें एवं सूचना भेजें" : "Publish & Notify")}
+                          </span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -2661,11 +2682,11 @@ export default function Admin() {
                     const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
                       ? "https://swadeshvaani.com"
                       : rawOrigin;
-                    const articleUrl = `${publicOrigin}/news/${publishedModalArticle.id}`;
-                    navigator.clipboard.writeText(articleUrl);
+                    const cleanUrl = `${publicOrigin}/news/${encodeURIComponent(publishedModalArticle.id)}`;
+                    navigator.clipboard.writeText(cleanUrl);
                     showToast("लिंक कॉपी कर लिया गया!", "success");
                   }}
-                  className="py-2.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+                  className="py-2.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
                   <FaCopy size={12} />
                   <span>कॉपी</span>
@@ -2678,13 +2699,20 @@ export default function Admin() {
                     const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
                       ? "https://swadeshvaani.com"
                       : rawOrigin;
-                    const articleUrl = `${publicOrigin}/news/${publishedModalArticle.id}`;
+                    const baseShare = `${publicOrigin}/news/${encodeURIComponent(publishedModalArticle.id)}`;
+                    const params = new URLSearchParams();
+                    if (publishedModalArticle.title) params.set("t", publishedModalArticle.title.substring(0, 80));
+                    if (publishedModalArticle.image && !publishedModalArticle.image.startsWith("data:image/")) {
+                      params.set("img", publishedModalArticle.image);
+                    }
+                    const qStr = params.toString();
+                    const articleUrl = qStr ? `${baseShare}?${qStr}` : baseShare;
                     const headline = publishedModalArticle.title || "ताज़ा समाचार";
                     const excerpt = publishedModalArticle.excerpt ? `\n\n${publishedModalArticle.excerpt}` : "";
                     const text = `${articleUrl}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews #BreakingNews`;
                     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
                   }}
-                  className="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+                  className="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
                   <FaWhatsapp size={13} />
                   <span>WhatsApp</span>
@@ -2697,11 +2725,18 @@ export default function Admin() {
                     const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
                       ? "https://swadeshvaani.com"
                       : rawOrigin;
-                    const articleUrl = `${publicOrigin}/news/${publishedModalArticle.id}`;
+                    const baseShare = `${publicOrigin}/news/${encodeURIComponent(publishedModalArticle.id)}`;
+                    const params = new URLSearchParams();
+                    if (publishedModalArticle.title) params.set("t", publishedModalArticle.title.substring(0, 80));
+                    if (publishedModalArticle.image && !publishedModalArticle.image.startsWith("data:image/")) {
+                      params.set("img", publishedModalArticle.image);
+                    }
+                    const qStr = params.toString();
+                    const articleUrl = qStr ? `${baseShare}?${qStr}` : baseShare;
                     const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(articleUrl)}`;
                     window.open(fbUrl, "fbShare", "width=640,height=580,menubar=no,toolbar=no");
                   }}
-                  className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+                  className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
                   <FaFacebookF size={12} />
                   <span>Facebook</span>

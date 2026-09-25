@@ -149,55 +149,85 @@ export default function ArticleDetail() {
     ? `${publicOrigin}/news/${encodeURIComponent(activeArticleId)}`
     : publicOrigin;
 
+  // Ultra-reliable share URL with fallback meta parameters so WhatsApp, Facebook, LinkedIn, Twitter crawlers NEVER fail
+  const getSocialShareUrl = () => {
+    const currentId = article?.id || article?.customId || id;
+    if (!currentId) return publicOrigin;
+    const base = `${publicOrigin}/news/${encodeURIComponent(currentId)}`;
+    const params = new URLSearchParams();
+    if (article?.title) {
+      params.set("t", article.title.substring(0, 80));
+    }
+    if (article?.image && !article.image.startsWith("data:image/")) {
+      params.set("img", article.image);
+    }
+    const q = params.toString();
+    return q ? `${base}?${q}` : base;
+  };
+
+  // Ensure Express backend has this article stored for WhatsApp and search engine crawlers
+  useEffect(() => {
+    if (article && article.id && article.title) {
+      fetch("/api/articles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(article),
+      }).catch(() => {});
+      if (typeof window !== "undefined" && (window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1"))) {
+        fetch("https://swadeshvaani.com/api/articles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(article),
+          mode: "cors",
+        }).catch(() => {});
+      }
+    }
+  }, [article]);
+
   const handleCopyLink = () => {
     const currentId = article?.id || article?.customId || id;
-    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
-    navigator.clipboard.writeText(currentUrl);
+    const cleanUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
+    navigator.clipboard.writeText(cleanUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
   const handleShareWa = () => {
-    const currentId = article?.id || article?.customId || id;
-    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
+    const shareLink = getSocialShareUrl();
     const headline = article?.title || "ताज़ा समाचार | स्वदेश वाणी";
     const excerpt = article?.excerpt ? `\n\n${article.excerpt}` : "";
-    const text = `${currentUrl}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews`;
+    const text = `${shareLink}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleShareFb = () => {
-    const currentId = article?.id || article?.customId || id;
-    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}&quote=${encodeURIComponent(article?.title || "")}`;
+    const shareLink = getSocialShareUrl();
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareLink)}&quote=${encodeURIComponent(article?.title || "")}`;
     window.open(fbUrl, "fbShare", "width=640,height=580,menubar=no,toolbar=no");
   };
 
   const handleShareLi = () => {
-    const currentId = article?.id || article?.customId || id;
-    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
-    const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(currentUrl)}`;
+    const shareLink = getSocialShareUrl();
+    const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareLink)}`;
     window.open(liUrl, "liShare", "width=640,height=600,menubar=no,toolbar=no");
   };
 
   const handleShareTw = () => {
-    const currentId = article?.id || article?.customId || id;
-    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
-    const twUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`🔴 ${article?.title || "ताज़ा समाचार"}`)}&url=${encodeURIComponent(currentUrl)}&hashtags=SwadeshVaani,JharkhandNews`;
+    const shareLink = getSocialShareUrl();
+    const twUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`🔴 ${article?.title || "ताज़ा समाचार"}`)}&url=${encodeURIComponent(shareLink)}&hashtags=SwadeshVaani,JharkhandNews`;
     window.open(twUrl, "twShare", "width=600,height=500,menubar=no,toolbar=no");
   };
 
   // Native mobile share sheet if supported
   const handleNativeShare = async () => {
-    const currentId = article?.id || article?.customId || id;
-    const currentUrl = currentId ? `${publicOrigin}/news/${encodeURIComponent(currentId)}` : shareUrl;
+    const shareLink = getSocialShareUrl();
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${article?.title || "ताज़ा समाचार"} | स्वदेश वाणी`,
           text: `📰 *${article?.title || "ताज़ा समाचार"}*\n${article?.excerpt ? article.excerpt + "\n" : ""}`,
-          url: currentUrl,
+          url: shareLink,
         });
         return;
       } catch (err) {
