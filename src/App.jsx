@@ -31,6 +31,22 @@ import { LanguageProvider } from "./context/LanguageContext.jsx";
 function AppLayout() {
   const location = useLocation();
 
+  // Scroll to top on every route change
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname, location.search]);
+
+  // Ensure scroll restoration is manual so user starts at the top
+  useEffect(() => {
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+  }, []);
+
   // Hide public Navbar and Footer on the admin page
   const isAdminPage = location.pathname.toLowerCase() === "/admin";
 

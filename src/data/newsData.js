@@ -1224,6 +1224,13 @@ export const saveArticleToStore = async (articleData) => {
       author: articleData.reporter || articleData.author || "स्वदेश वाणी ब्यूरो",
       status: articleData.status || "Published",
       createdAt: articleData.createdAt || Date.now(),
+      time:
+        articleData.time ||
+        new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
       date:
         articleData.date ||
         new Date().toLocaleDateString("en-GB", {

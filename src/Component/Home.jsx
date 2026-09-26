@@ -22,6 +22,7 @@ import {
   getCategoryFallbackImage,
 } from "../data/newsData";
 import { useLanguage } from "../context/LanguageContext";
+import { formatArticleTime } from "../utils/timeAgo";
 import SubscribeSection from "./SubscribeSection";
 
 // Reusable Single Ad Banner Component
@@ -482,7 +483,13 @@ const Home = () => {
 
                 <span className="flex items-center gap-1.5">
                   <Clock size={15} className="text-orange-500" />
-                  {mainNews.date}
+                  <span>{mainNews.date}</span>
+                  {formatArticleTime(mainNews) && (
+                    <>
+                      <span className="text-slate-300">•</span>
+                      <span className="font-medium text-slate-700">{formatArticleTime(mainNews)}</span>
+                    </>
+                  )}
                 </span>
               </div>
 
@@ -543,7 +550,13 @@ const Home = () => {
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock size={12} />
-                        {item.date || (language === "hi" ? "आज" : "Today")}
+                        <span>{item.date || (language === "hi" ? "आज" : "Today")}</span>
+                        {formatArticleTime(item) && (
+                          <>
+                            <span className="text-slate-300">•</span>
+                            <span className="font-medium text-slate-500">{formatArticleTime(item)}</span>
+                          </>
+                        )}
                       </span>
                     </div>
                   </Link>
@@ -597,9 +610,13 @@ const Home = () => {
               </p>
             </div>
 
-            <span className="rounded-full bg-orange-500 px-3 py-1 text-sm font-bold text-white">
-              {language === "hi" ? `कुल ${toHindiNumber(newsData.length)} खबरें` : `Total ${newsData.length} Stories`}
-            </span>
+            <Link
+              to="/News"
+              className="group inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-4 py-1.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 active:scale-95 cursor-pointer"
+            >
+              <span>{language === "hi" ? `कुल ${toHindiNumber(newsData.length)} खबरें` : `Total ${newsData.length} Stories`}</span>
+              <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
+            </Link>
           </div>
         </section>
       )}
@@ -717,14 +734,14 @@ const Home = () => {
             </h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {newsData.map((item, index) => (
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
+            {newsData.slice(0, 10).map((item, index) => (
               <article
                 key={item.id}
-                className="flex gap-4 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-orange-200 hover:shadow-sm"
+                className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-2.5 sm:p-4 transition hover:border-orange-200 hover:shadow-sm sm:flex-row sm:gap-4"
               >
                 {item.image ? (
-                  <Link to={`/news/${item.id}`} className="hidden h-24 w-32 shrink-0 overflow-hidden rounded-lg sm:block group">
+                  <Link to={`/news/${item.id}`} className="block h-24 sm:h-24 sm:w-32 w-full shrink-0 overflow-hidden rounded-lg group mb-2 sm:mb-0">
                     <img
                       src={resolveArticleImage(item.image, item.category, item.id || item.title || index)}
                       alt={item.title}
@@ -743,46 +760,68 @@ const Home = () => {
 
                 <div className="min-w-0 flex-1 flex flex-col justify-between">
                   <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold text-orange-600">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                      <span className="text-[10px] sm:text-xs font-bold text-orange-600">
                         #{toHindiNumber(index + 1)}
                       </span>
 
-                      <span className="text-xs font-medium text-slate-500">
+                      <span className="text-[10px] sm:text-xs font-medium text-slate-500">
                         {item.category}
                       </span>
 
                       {item.district && (
-                        <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-medium">
+                        <span className="text-[10px] sm:text-xs text-blue-700 bg-blue-50 px-1.5 sm:px-2 py-0.5 rounded font-medium">
                           📍 {item.district}
                         </span>
                       )}
                     </div>
 
-                    <h3 className="mt-1 line-clamp-2 font-bold leading-6 text-blue-950">
+                    <h3 className="mt-1 line-clamp-2 text-xs sm:text-base font-bold leading-snug sm:leading-6 text-blue-950">
                       <Link to={`/news/${item.id}`} className="hover:text-orange-600 transition">
                         {item.title}
                       </Link>
                     </h3>
                   </div>
 
-                  <div className="mt-2 flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <User size={12} className="text-slate-400" />
-                      {item.reporter || item.author || t("reporterFallback")}
+                  <div className="mt-2 flex items-center justify-between pt-1.5 sm:pt-2 border-t border-slate-100 text-[10px] sm:text-xs text-slate-400">
+                    <span className="flex items-center gap-1 truncate max-w-[70px] sm:max-w-none">
+                      <User size={11} className="text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{item.reporter || item.author || t("reporterFallback")}</span>
                     </span>
 
                     <Link
                       to={`/news/${item.id}`}
-                      className="inline-flex items-center gap-1 font-semibold text-orange-600 hover:text-orange-700"
+                      className="inline-flex items-center gap-0.5 sm:gap-1 font-semibold text-orange-600 hover:text-orange-700 flex-shrink-0"
                     >
-                      {t("readStory")}
-                      <ArrowRight size={14} />
+                      <span>{t("readStory")}</span>
+                      <ArrowRight size={12} />
                     </Link>
                   </div>
                 </div>
               </article>
             ))}
+          </div>
+
+          {/* Bottom counter banner with link to /News */}
+          <div className="mt-8">
+            <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+              <div>
+                <p className="text-sm font-semibold text-blue-950">
+                  {t("todayTopStories")}
+                </p>
+                <p className="mt-1 text-xs text-blue-700">
+                  {t("todayTopStoriesSubtitle")}
+                </p>
+              </div>
+
+              <Link
+                to="/News"
+                className="group inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-4 py-1.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 active:scale-95 cursor-pointer"
+              >
+                <span>{language === "hi" ? `कुल ${toHindiNumber(newsData.length)} खबरें` : `Total ${newsData.length} Stories`}</span>
+                <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
+              </Link>
+            </div>
           </div>
         </section>
       )}

@@ -24,7 +24,7 @@ import { getArticleById, getAllArticles, syncArticlesFromServer, resolveArticleI
 import { getArticleByIdFromFirestore } from "../utils/firebase";
 import { safeStorage } from "../utils/safeStorage";
 import { useLanguage } from "../context/LanguageContext";
-import { formatTimeAgo } from "../utils/timeAgo";
+import { formatTimeAgo, formatArticleTime } from "../utils/timeAgo";
 import SubscribeSection from "./SubscribeSection";
 
 export default function ArticleDetail() {
@@ -152,20 +152,11 @@ export default function ArticleDetail() {
     ? `${publicOrigin}/news/${encodeURIComponent(activeArticleId)}`
     : publicOrigin;
 
-  // Ultra-reliable share URL with fallback meta parameters so WhatsApp, Facebook, LinkedIn, Twitter crawlers NEVER fail
+  // Clean public article URL for social sharing (WhatsApp, Facebook, Twitter, etc.)
   const getSocialShareUrl = () => {
     const currentId = article?.id || article?.customId || id;
     if (!currentId) return publicOrigin;
-    const base = `${publicOrigin}/news/${encodeURIComponent(currentId)}`;
-    const params = new URLSearchParams();
-    if (article?.title) {
-      params.set("t", article.title.substring(0, 80));
-    }
-    if (article?.image && !article.image.startsWith("data:image/")) {
-      params.set("img", article.image);
-    }
-    const q = params.toString();
-    return q ? `${base}?${q}` : base;
+    return `${publicOrigin}/news/${encodeURIComponent(currentId)}`;
   };
 
   // Ensure Express backend has this article stored for WhatsApp and search engine crawlers
@@ -199,27 +190,27 @@ export default function ArticleDetail() {
     const shareLink = getSocialShareUrl();
     const headline = article?.title || "ताज़ा समाचार | स्वदेश वाणी";
     const excerpt = article?.excerpt ? `\n\n${article.excerpt}` : "";
-    const text = `${shareLink}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews`;
+    const text = `📰 *${headline}*${excerpt}\n\n🔗 पूरी खबर यहाँ पढ़ें:\n${shareLink}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleShareFb = () => {
     const shareLink = getSocialShareUrl();
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareLink)}&quote=${encodeURIComponent(article?.title || "")}`;
-    window.open(fbUrl, "fbShare", "width=640,height=580,menubar=no,toolbar=no");
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareLink)}`;
+    window.open(fbUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleShareLi = () => {
     const shareLink = getSocialShareUrl();
     const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareLink)}`;
-    window.open(liUrl, "liShare", "width=640,height=600,menubar=no,toolbar=no");
+    window.open(liUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleShareTw = () => {
     const shareLink = getSocialShareUrl();
     const twUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(`🔴 ${article?.title || "ताज़ा समाचार"}`)}&url=${encodeURIComponent(shareLink)}&hashtags=SwadeshVaani,JharkhandNews`;
-    window.open(twUrl, "twShare", "width=600,height=500,menubar=no,toolbar=no");
+    window.open(twUrl, "_blank", "noopener,noreferrer");
   };
 
   // Native mobile share sheet if supported
@@ -334,11 +325,11 @@ export default function ArticleDetail() {
                 )}
               </div>
 
-              {/* Time Ago (Relative Time: e.g. 1 min before, 1 hour before, 1 day before) */}
-              {article && (
+              {/* Publication Time (e.g. 1:30 PM) */}
+              {article && formatArticleTime(article) && (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100/90 px-3 py-1 text-xs font-semibold text-slate-600 border border-slate-200/80 shadow-xs">
                   <Clock className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" />
-                  <span>{formatTimeAgo(article, language)}</span>
+                  <span>{formatArticleTime(article)}</span>
                 </div>
               )}
             </div>
@@ -371,6 +362,15 @@ export default function ArticleDetail() {
               <div className="flex items-center gap-2 font-medium text-slate-500">
                 <Calendar className="h-4 w-4 text-orange-500" />
                 <span>{article.date || "आज"}</span>
+                {formatArticleTime(article) && (
+                  <>
+                    <span className="text-slate-300">•</span>
+                    <span className="flex items-center gap-1 font-medium text-slate-600">
+                      <Clock className="h-3.5 w-3.5 text-orange-500" />
+                      <span>{formatArticleTime(article)}</span>
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 

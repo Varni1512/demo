@@ -425,6 +425,11 @@ export default function Admin() {
       id: isEdit ? editingArticleId : `art-${Date.now()}`,
       slug: generateSlug(formData.title),
       createdAt: isEdit ? (formData.createdAt || Date.now()) : (formData.createdAt || Date.now()),
+      time: formData.time || new Date().toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
       date: new Date().toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "short",
@@ -2700,17 +2705,10 @@ export default function Admin() {
                     const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
                       ? "https://swadeshvaani.com"
                       : rawOrigin;
-                    const baseShare = `${publicOrigin}/news/${encodeURIComponent(publishedModalArticle.id)}`;
-                    const params = new URLSearchParams();
-                    if (publishedModalArticle.title) params.set("t", publishedModalArticle.title.substring(0, 80));
-                    if (publishedModalArticle.image && !publishedModalArticle.image.startsWith("data:image/")) {
-                      params.set("img", publishedModalArticle.image);
-                    }
-                    const qStr = params.toString();
-                    const articleUrl = qStr ? `${baseShare}?${qStr}` : baseShare;
+                    const articleUrl = `${publicOrigin}/news/${encodeURIComponent(publishedModalArticle.id)}`;
                     const headline = publishedModalArticle.title || "ताज़ा समाचार";
                     const excerpt = publishedModalArticle.excerpt ? `\n\n${publishedModalArticle.excerpt}` : "";
-                    const text = `${articleUrl}\n\n📰 *${headline}*${excerpt}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews #BreakingNews`;
+                    const text = `📰 *${headline}*${excerpt}\n\n🔗 पूरी खबर यहाँ पढ़ें:\n${articleUrl}\n\n━━━━━━━━━━━━━━━\n🌐 *स्वदेश वाणी* (Swadesh Vaani)\n#SwadeshVaani #JharkhandNews #BreakingNews`;
                     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
                   }}
                   className="py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
@@ -2726,16 +2724,9 @@ export default function Admin() {
                     const publicOrigin = (rawOrigin.includes("localhost") || rawOrigin.includes("127.0.0.1"))
                       ? "https://swadeshvaani.com"
                       : rawOrigin;
-                    const baseShare = `${publicOrigin}/news/${encodeURIComponent(publishedModalArticle.id)}`;
-                    const params = new URLSearchParams();
-                    if (publishedModalArticle.title) params.set("t", publishedModalArticle.title.substring(0, 80));
-                    if (publishedModalArticle.image && !publishedModalArticle.image.startsWith("data:image/")) {
-                      params.set("img", publishedModalArticle.image);
-                    }
-                    const qStr = params.toString();
-                    const articleUrl = qStr ? `${baseShare}?${qStr}` : baseShare;
+                    const articleUrl = `${publicOrigin}/news/${encodeURIComponent(publishedModalArticle.id)}`;
                     const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(articleUrl)}`;
-                    window.open(fbUrl, "fbShare", "width=640,height=580,menubar=no,toolbar=no");
+                    window.open(fbUrl, "_blank", "noopener,noreferrer");
                   }}
                   className="py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
