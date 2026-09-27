@@ -623,20 +623,20 @@ const Home = () => {
 
       {/* Top headlines */}
       {topHeadlines.length > 0 && (
-        <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-          <div className="mb-7 flex items-end justify-between">
+        <section className="mx-auto max-w-7xl px-3 sm:px-8 py-6 sm:py-8">
+          <div className="mb-5 sm:mb-7 flex items-end justify-between">
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-orange-600">
+              <p className="mb-1 sm:mb-2 text-xs font-semibold uppercase tracking-widest text-orange-600">
                 {t("featuredBadge")}
               </p>
 
-              <h2 className="text-2xl font-bold text-blue-950 sm:text-3xl">
+              <h2 className="text-xl sm:text-3xl font-bold text-blue-950">
                 {t("featuredStories")}
               </h2>
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
             {topHeadlines.map((item, idx) => (
               <article
                 key={item.id}
@@ -656,15 +656,15 @@ const Home = () => {
                             e.currentTarget.parentElement.style.display = "none";
                           }
                         }}
-                        className="h-52 w-full object-cover transition duration-500 group-hover:scale-105"
+                        className="h-28 sm:h-52 w-full object-cover transition duration-500 group-hover:scale-105"
                       />
 
-                      <div className="absolute left-4 top-4 flex flex-wrap gap-1.5">
-                        <span className="rounded-full bg-white/95 backdrop-blur-sm px-3 py-1 text-xs font-semibold text-orange-600 shadow-sm">
+                      <div className="absolute left-2 top-2 sm:left-4 sm:top-4 flex flex-wrap gap-1 sm:gap-1.5">
+                        <span className="rounded-full bg-white/95 backdrop-blur-sm px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold text-orange-600 shadow-sm">
                           {item.category}
                         </span>
                         {item.district && (
-                          <span className="rounded-full bg-blue-950/80 backdrop-blur-sm px-2.5 py-1 text-[11px] font-medium text-white shadow-sm flex items-center gap-1">
+                          <span className="rounded-full bg-blue-950/80 backdrop-blur-sm px-1.5 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[11px] font-medium text-white shadow-sm flex items-center gap-0.5 sm:gap-1">
                             <MapPin size={10} className="text-orange-400" />
                             {item.district}
                           </span>
@@ -672,12 +672,12 @@ const Home = () => {
                       </div>
                     </Link>
                   ) : (
-                    <div className="p-5 pb-0 flex flex-wrap gap-1.5">
-                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-600">
+                    <div className="p-3 sm:p-5 pb-0 flex flex-wrap gap-1 sm:gap-1.5">
+                      <span className="rounded-full bg-orange-100 px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-xs font-semibold text-orange-600">
                         {item.category}
                       </span>
                       {item.district && (
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700 flex items-center gap-1">
+                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[11px] font-medium text-slate-700 flex items-center gap-1">
                           <MapPin size={10} className="text-orange-500" />
                           {item.district}
                         </span>
@@ -685,8 +685,8 @@ const Home = () => {
                     </div>
                   )}
 
-                  <div className="p-5">
-                    <h3 className="line-clamp-3 text-lg font-bold leading-7 text-blue-950">
+                  <div className="p-2.5 sm:p-5">
+                    <h3 className="line-clamp-2 sm:line-clamp-3 text-xs sm:text-lg font-bold leading-snug sm:leading-7 text-blue-950">
                       <Link
                         to={`/news/${item.id}`}
                         className="hover:text-orange-600 transition"
@@ -695,24 +695,34 @@ const Home = () => {
                       </Link>
                     </h3>
 
-                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-500">
+                    <p className="mt-1.5 sm:mt-3 line-clamp-2 sm:line-clamp-3 text-[11px] sm:text-sm leading-snug sm:leading-6 text-slate-500 hidden sm:block">
                       {item.excerpt}
                     </p>
                   </div>
                 </div>
 
-                <div className="px-5 pb-5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                  <span className="flex items-center gap-1 truncate max-w-[150px]">
-                    <User size={13} className="text-orange-500 flex-shrink-0" />
-                    <span className="truncate">{item.reporter || item.author || t("reporterFallback")}</span>
-                  </span>
+                <div className="px-2.5 pb-2.5 sm:px-5 sm:pb-5 pt-1.5 sm:pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] sm:text-xs text-slate-400 gap-1">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="flex items-center gap-1 text-slate-500 shrink-0 font-medium">
+                      <Clock size={11} className="text-orange-500 flex-shrink-0" />
+                      <span className="hidden sm:inline">{item.date ? `${item.date} • ` : ""}</span>
+                      <span>{formatArticleTime(item)}</span>
+                    </span>
+
+                    <span className="hidden md:inline text-slate-200">•</span>
+
+                    <span className="hidden md:flex items-center gap-1 truncate max-w-[100px]">
+                      <User size={12} className="text-orange-500 flex-shrink-0" />
+                      <span className="truncate">{item.reporter || item.author || t("reporterFallback")}</span>
+                    </span>
+                  </div>
 
                   <Link
                     to={`/news/${item.id}`}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-orange-600 transition hover:text-orange-700"
+                    className="inline-flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs font-bold text-orange-600 transition hover:text-orange-700 shrink-0 ml-1"
                   >
-                    {t("readStory")}
-                    <ArrowRight size={14} />
+                    <span>{t("readStory")}</span>
+                    <ArrowRight size={12} />
                   </Link>
                 </div>
               </article>
@@ -783,15 +793,24 @@ const Home = () => {
                     </h3>
                   </div>
 
-                  <div className="mt-2 flex items-center justify-between pt-1.5 sm:pt-2 border-t border-slate-100 text-[10px] sm:text-xs text-slate-400">
-                    <span className="flex items-center gap-1 truncate max-w-[70px] sm:max-w-none">
-                      <User size={11} className="text-slate-400 flex-shrink-0" />
-                      <span className="truncate">{item.reporter || item.author || t("reporterFallback")}</span>
-                    </span>
+                  <div className="mt-2 flex items-center justify-between pt-1.5 sm:pt-2 border-t border-slate-100 text-[10px] sm:text-xs text-slate-400 gap-1.5">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="flex items-center gap-1 text-slate-500 font-medium shrink-0">
+                        <Clock size={11} className="text-orange-500 flex-shrink-0" />
+                        <span>{formatArticleTime(item)}</span>
+                      </span>
+
+                      <span className="hidden sm:inline text-slate-300">•</span>
+
+                      <span className="hidden sm:flex items-center gap-1 truncate max-w-[90px] md:max-w-[120px]">
+                        <User size={11} className="text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{item.reporter || item.author || t("reporterFallback")}</span>
+                      </span>
+                    </div>
 
                     <Link
                       to={`/news/${item.id}`}
-                      className="inline-flex items-center gap-0.5 sm:gap-1 font-semibold text-orange-600 hover:text-orange-700 flex-shrink-0"
+                      className="inline-flex items-center gap-0.5 sm:gap-1 font-semibold text-orange-600 hover:text-orange-700 flex-shrink-0 ml-1"
                     >
                       <span>{t("readStory")}</span>
                       <ArrowRight size={12} />

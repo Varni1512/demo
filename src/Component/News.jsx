@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Clock, ArrowRight, MapPin, User, Filter, Search, X } from "lucide-react";
 import { getAllArticles, syncArticlesFromServer, JHARKHAND_DISTRICTS, NEWS_CATEGORIES, resolveArticleImage, getCategoryFallbackImage } from "../data/newsData";
 import { useLanguage } from "../context/LanguageContext";
+import { formatArticleTime } from "../utils/timeAgo";
 
 export default function CategoriesSection() {
   const { language, t } = useLanguage();
@@ -244,7 +245,16 @@ export default function CategoriesSection() {
                             )}
 
                             <span className="text-slate-400">•</span>
-                            <span className="text-slate-500">{article.date}</span>
+                            <span className="text-slate-500 flex items-center gap-1">
+                              <Clock size={11} className="text-orange-500" />
+                              <span>{article.date}</span>
+                              {formatArticleTime(article) && (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="font-medium text-slate-600">{formatArticleTime(article)}</span>
+                                </>
+                              )}
+                            </span>
                           </div>
 
                           <h3 className="text-lg sm:text-xl font-bold leading-snug text-blue-950 group-hover:text-orange-600 transition">
