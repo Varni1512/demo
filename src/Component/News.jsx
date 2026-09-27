@@ -78,8 +78,8 @@ export default function CategoriesSection() {
   );
 
   return (
-    <div className="bg-slate-50 min-h-screen py-12">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-10">
+    <div className="bg-slate-50 min-h-screen py-6 sm:py-12">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 space-y-6 sm:space-y-10">
         {/* Page Header */}
         <div className="border-b border-slate-200 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
@@ -188,101 +188,96 @@ export default function CategoriesSection() {
             return (
               <section
                 key={catName}
-                className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-sm"
+                className="bg-white p-3.5 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-sm"
               >
                 {/* Category header */}
-                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-slate-100">
-                  <span className="h-6 w-2 rounded-full bg-orange-500"></span>
-                  <h2 className="text-2xl font-bold tracking-tight text-blue-950">
+                <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-8 pb-3 sm:pb-4 border-b border-slate-100">
+                  <span className="h-5 sm:h-6 w-1.5 sm:w-2 rounded-full bg-orange-500"></span>
+                  <h2 className="text-lg sm:text-2xl font-bold tracking-tight text-blue-950">
                     {catName}
                   </h2>
                   <div className="flex-1 h-px bg-slate-100" />
-                  <span className="text-xs font-semibold text-slate-400">
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-400">
                     {catArticles.length} खबरें
                   </span>
                 </div>
 
-                {/* Articles grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Articles grid - 2 columns on mobile */}
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-6 md:grid-cols-2">
                   {catArticles.map((article) => (
                     <article
                       key={article.id}
-                      className="group flex flex-col gap-4 border border-slate-100 p-4 rounded-2xl bg-slate-50/50 hover:bg-white hover:border-orange-200 hover:shadow-md transition duration-300"
+                      className="group flex flex-col justify-between border border-slate-100 p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-50/50 hover:bg-white hover:border-orange-200 hover:shadow-md transition duration-300"
                     >
-                      {article.image ? (
-                        <Link
-                          to={`/news/${article.id}`}
-                          className="overflow-hidden rounded-xl bg-slate-100 block"
-                        >
-                          <img
-                            src={resolveArticleImage(article.image, article.category, article.id || article.title)}
-                            alt={article.title}
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              if (article.image && article.image.startsWith("/uploads/") && !e.currentTarget.src.startsWith("https://swadeshvaani.com")) {
-                                e.currentTarget.src = `https://swadeshvaani.com${article.image}`;
-                              } else {
-                                e.currentTarget.parentElement.style.display = "none";
-                              }
-                            }}
-                            className="w-full h-[220px] object-cover transition-transform duration-500 group-hover:scale-105"
-                          />
-                        </Link>
-                      ) : null}
+                      <div>
+                        {article.image ? (
+                          <Link
+                            to={`/news/${article.id}`}
+                            className="overflow-hidden rounded-lg sm:rounded-xl bg-slate-100 block"
+                          >
+                            <img
+                              src={resolveArticleImage(article.image, article.category, article.id || article.title)}
+                              alt={article.title}
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                if (article.image && article.image.startsWith("/uploads/") && !e.currentTarget.src.startsWith("https://swadeshvaani.com")) {
+                                  e.currentTarget.src = `https://swadeshvaani.com${article.image}`;
+                                } else {
+                                  e.currentTarget.parentElement.style.display = "none";
+                                }
+                              }}
+                              className="w-full h-28 sm:h-52 object-cover transition-transform duration-500 group-hover:scale-105"
+                            />
+                          </Link>
+                        ) : null}
 
-                      <div className="space-y-2.5 flex-1 flex flex-col justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
-                            <span className="font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-100">
+                        <div className="mt-2 sm:mt-3 space-y-1.5 sm:space-y-2.5">
+                          <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs">
+                            <span className="font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-1.5 sm:px-2.5 py-0.5 rounded-full border border-orange-100 text-[9px] sm:text-xs">
                               {article.category}
                             </span>
 
                             {article.district && (
-                              <span className="flex items-center gap-1 text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100 font-medium">
-                                <MapPin size={11} className="text-orange-500" />
+                              <span className="flex items-center gap-0.5 text-blue-800 bg-blue-50 px-1.5 sm:px-2.5 py-0.5 rounded-full border border-blue-100 font-medium text-[9px] sm:text-xs">
+                                <MapPin size={10} className="text-orange-500" />
                                 {article.district}
                               </span>
                             )}
 
-                            <span className="text-slate-400">•</span>
-                            <span className="text-slate-500 flex items-center gap-1">
-                              <Clock size={11} className="text-orange-500" />
-                              <span>{article.date}</span>
-                              {formatArticleTime(article) && (
-                                <>
-                                  <span className="text-slate-300">•</span>
-                                  <span className="font-medium text-slate-600">{formatArticleTime(article)}</span>
-                                </>
-                              )}
+                            <span className="text-slate-500 flex items-center gap-1 text-[10px] sm:text-xs">
+                              <Clock size={10} className="text-orange-500 shrink-0" />
+                              <span className="hidden sm:inline">{article.date ? `${article.date} • ` : ""}</span>
+                              <span>{formatArticleTime(article)}</span>
                             </span>
                           </div>
 
-                          <h3 className="text-lg sm:text-xl font-bold leading-snug text-blue-950 group-hover:text-orange-600 transition">
+                          <h3 className="text-xs sm:text-lg font-bold leading-snug sm:leading-snug text-blue-950 group-hover:text-orange-600 transition line-clamp-2">
                             <Link to={`/news/${article.id}`}>{article.title}</Link>
                           </h3>
 
                           {article.excerpt && (
-                            <p className="text-xs sm:text-sm text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                            <p className="text-xs sm:text-sm text-slate-500 mt-1 line-clamp-2 leading-relaxed hidden sm:block">
                               {article.excerpt}
                             </p>
                           )}
                         </div>
+                      </div>
 
-                        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                          <span className="flex items-center gap-1 text-xs text-slate-500">
-                            <User size={13} className="text-orange-500" />
-                            <span className="font-medium">
-                              {article.reporter || article.author || t("reporterFallback")}
-                            </span>
+                      <div className="mt-2.5 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] sm:text-xs">
+                        <span className="hidden sm:flex items-center gap-1 text-slate-500 truncate max-w-[120px]">
+                          <User size={12} className="text-orange-500 shrink-0" />
+                          <span className="font-medium truncate">
+                            {article.reporter || article.author || t("reporterFallback")}
                           </span>
+                        </span>
 
-                          <Link
-                            to={`/news/${article.id}`}
-                            className="inline-flex items-center gap-1 text-xs font-bold text-orange-600 hover:text-orange-700"
-                          >
-                            {t("readStory")} <ArrowRight size={14} />
-                          </Link>
-                        </div>
+                        <Link
+                          to={`/news/${article.id}`}
+                          className="inline-flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs font-bold text-orange-600 hover:text-orange-700 ml-auto sm:ml-0"
+                        >
+                          <span>{t("readStory")}</span>
+                          <ArrowRight size={12} />
+                        </Link>
                       </div>
                     </article>
                   ))}
